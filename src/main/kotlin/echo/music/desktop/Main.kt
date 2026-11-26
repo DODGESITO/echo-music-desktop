@@ -39,7 +39,7 @@ import echo.music.desktop.ui.screens.SettingsScreen
 import echo.music.desktop.ui.theme.EchoDesktopTheme
 import echo.music.desktop.ui.theme.NothingColors
 
-fun main(args: Array<String>) = application {
+fun main(args: Array<String>) = if (installPendingUpdate()) Unit else application {
     val prefs = PreferencesStore.current
     remember { echo.music.desktop.ui.theme.NothingColors.applyTheme(prefs.themeAccent, prefs.themeBackground) }
     val windowState = rememberWindowState(
@@ -80,6 +80,14 @@ fun main(args: Array<String>) = application {
         onDispose {
             saveWindowState()
             appModel.release()
+        }
+    }
+
+    // "Reiniciar ahora" of a downloaded update: close normally (release() starts the installer).
+    LaunchedEffect(Unit) {
+        appModel.exitRequests.collect {
+            saveWindowState()
+            exitApplication()
         }
     }
 
@@ -469,9 +477,13 @@ fun main(args: Array<String>) = application {
                     }
 
                     val updateBanner by appModel.updateBanner.collectAsState()
+                    val updateState by appModel.update.collectAsState()
                     updateBanner?.let { info ->
                         echo.music.desktop.ui.components.UpdateBanner(
                             info = info,
+                            downloading = updateState.downloading,
+                            ready = updateState.readyVersion == info.version,
+                            onRestart = { appModel.restartToUpdate() },
                             onDownload = {
                                 appModel.openUpdatePage()
                                 appModel.dismissUpdate(skip = false)
@@ -688,4 +700,15 @@ fun main(args: Array<String>) = application {
             }
         }
     }
+}
+
+/**
+ * A verified update downloaded earlier (Echo Music was not closed normally, or the PC shut down):
+ * install it now, before opening the window. Echo Music opens again by itself afterwards.
+ */
+private fun installPendingUpdate(): Boolean {
+    if (!PreferencesStore.current.autoInstallUpdates) return false
+    if (!echo.music.desktop.system.UpdateInstaller.canAutoInstall) return false
+    val msi = echo.music.desktop.system.UpdateInstaller.pendingInstaller() ?: return false
+    return echo.music.desktop.system.UpdateInstaller.installAfterExit(msi)
 }

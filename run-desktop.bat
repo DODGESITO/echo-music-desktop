@@ -23,7 +23,7 @@ if defined JAVA_HOME (
     echo Usando JDK 21: %JAVA_HOME%
 )
 
-call gradlew.bat run
+call .\gradlew.bat run
 
 if %ERRORLEVEL% NEQ 0 (
     echo.

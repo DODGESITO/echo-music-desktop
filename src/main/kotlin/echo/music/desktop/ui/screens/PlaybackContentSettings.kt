@@ -790,9 +790,19 @@ fun UpdateSettings(appModel: DesktopAppModel) {
                 "Versión ${echo.music.desktop.system.AppInfo.version}",
                 update.message ?: "Busca versiones nuevas en las publicaciones (releases) de GitHub."
             )
-            update.available?.let { info ->
-                TextButton(onClick = { appModel.openUpdatePage() }) {
-                    Text("Descargar ${info.version}", color = NothingColors.AccentRed)
+            when {
+                update.readyVersion != null -> TextButton(onClick = { appModel.restartToUpdate() }) {
+                    Text("Reiniciar y actualizar", color = NothingColors.AccentRed)
+                }
+                update.downloading != null -> Text(
+                    "Descargando ${((update.downloading ?: 0f) * 100).toInt()}%",
+                    color = NothingColors.TextSecondary,
+                    style = MaterialTheme.typography.bodySmall
+                )
+                else -> update.available?.let { info ->
+                    TextButton(onClick = { appModel.openUpdatePage() }) {
+                        Text("Descargar ${info.version}", color = NothingColors.AccentRed)
+                    }
                 }
             }
             TextButton(onClick = { appModel.checkForUpdates(manual = true) }, enabled = !update.checking) {
@@ -809,6 +819,17 @@ fun UpdateSettings(appModel: DesktopAppModel) {
             description = "Una vez al día, al abrir Echo Music.",
             checked = prefs.checkUpdates,
             onChange = { v -> appModel.updatePreferences { it.copy(checkUpdates = v) } }
+        )
+        Spacer(Modifier.height(10.dp))
+        ToggleRow(
+            title = "Instalar actualizaciones solas",
+            description = if (appModel.canAutoInstallUpdates) {
+                "Descarga la versión nueva en segundo plano y la instala sin pedir permisos al cerrar Echo Music."
+            } else {
+                "Solo en la versión instalada con el instalador. Aquí solo te avisa y abre la página de descarga."
+            },
+            checked = prefs.autoInstallUpdates,
+            onChange = { v -> appModel.updatePreferences { it.copy(autoInstallUpdates = v) } }
         )
         Spacer(Modifier.height(10.dp))
         OutlinedTextField(

@@ -44,7 +44,8 @@ val sharedRomanization = tasks.register("syncSharedRomanization") {
 }
 
 /** App version: used by the installers and shown/compared by the update checker. */
-val appVersion = "1.1.0"
+// -PappVersion=x.y.z builds another version (used to test updates).
+val appVersion = (findProperty("appVersion") as String?) ?: "1.2.0"
 
 val versionResource = tasks.register("generateVersionResource") {
     val target = layout.buildDirectory.file("generated/versionResource/echo-version.txt")
@@ -199,8 +200,9 @@ compose.desktop {
             windows {
                 menu = true
                 shortcut = true
-                dirChooser = true
-                perUserInstall = false
+                // Per-user install (%LOCALAPPDATA%): no administrator prompt, so updates install silently.
+                dirChooser = false
+                perUserInstall = true
                 menuGroup = "Echo Music"
                 upgradeUuid = "a4c28f32-8419-4b2a-bf34-7fa454f73891"
                 iconFile.set(project.file("src/main/resources/icon.ico"))

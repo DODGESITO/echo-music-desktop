@@ -24,6 +24,9 @@ import echo.music.desktop.ui.theme.NothingColors
 @Composable
 fun UpdateBanner(
     info: UpdateInfo,
+    downloading: Float? = null,
+    ready: Boolean = false,
+    onRestart: () -> Unit = {},
     onDownload: () -> Unit,
     onLater: () -> Unit,
     onSkip: () -> Unit,
@@ -42,7 +45,11 @@ fun UpdateBanner(
             Icon(Icons.Default.SystemUpdate, null, tint = NothingColors.AccentRed, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(10.dp))
             Text(
-                "Echo Music ${info.version} disponible",
+                when {
+                    ready -> "Echo Music ${info.version} está lista"
+                    downloading != null -> "Descargando Echo Music ${info.version}… ${(downloading * 100).toInt()}%"
+                    else -> "Echo Music ${info.version} disponible"
+                },
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = NothingColors.TextPrimary)
             )
         }
@@ -55,10 +62,26 @@ fun UpdateBanner(
                 style = MaterialTheme.typography.bodySmall.copy(color = NothingColors.TextSecondary)
             )
         }
+        if (ready) {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Se instalará sola al cerrar Echo Music, sin pedir permisos.",
+                style = MaterialTheme.typography.bodySmall.copy(color = NothingColors.TextSecondary)
+            )
+        }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            TextButton(onClick = onSkip) { Text("Omitir versión", color = NothingColors.TextMuted) }
-            TextButton(onClick = onLater) { Text("Más tarde", color = NothingColors.TextSecondary) }
-            TextButton(onClick = onDownload) { Text("Descargar", color = NothingColors.AccentRed) }
+            when {
+                ready -> {
+                    TextButton(onClick = onLater) { Text("Al cerrar", color = NothingColors.TextSecondary) }
+                    TextButton(onClick = onRestart) { Text("Reiniciar ahora", color = NothingColors.AccentRed) }
+                }
+                downloading != null -> TextButton(onClick = onLater) { Text("Ocultar", color = NothingColors.TextSecondary) }
+                else -> {
+                    TextButton(onClick = onSkip) { Text("Omitir versión", color = NothingColors.TextMuted) }
+                    TextButton(onClick = onLater) { Text("Más tarde", color = NothingColors.TextSecondary) }
+                    TextButton(onClick = onDownload) { Text("Descargar", color = NothingColors.AccentRed) }
+                }
+            }
         }
     }
 }

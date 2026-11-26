@@ -2588,8 +2588,45 @@ class DesktopAppModel(
             }
             if (result is echo.music.desktop.system.UpdateResult.Available &&
                 (manual || result.info.version != _prefs.value.skippedUpdateVersion)
-            ) _updateBanner.value = result.info
+            ) {
+                _updateBanner.value = result.info
+                if (_prefs.value.autoInstallUpdates) downloadUpdate(result.info)
+            }
         }
+    }
+
+    /** True when this copy can install updates by itself (installed for this user, without admin). */
+    val canAutoInstallUpdates: Boolean get() = echo.music.desktop.system.UpdateInstaller.canAutoInstall
+
+    private fun downloadUpdate(info: echo.music.desktop.system.UpdateInfo) {
+        val pkg = info.installer ?: return
+        if (!echo.music.desktop.system.UpdateInstaller.canAutoInstall || _update.value.downloading != null) return
+        if (echo.music.desktop.system.UpdateInstaller.pendingVersion() == info.version && echo.music.desktop.system.UpdateInstaller.pendingInstaller() != null) {
+            _update.value = _update.value.copy(readyVersion = info.version, message = "Echo Music ${info.version} se instalará al cerrar.")
+            return
+        }
+        _update.value = _update.value.copy(downloading = 0f)
+        scope.launch {
+            val file = withContext(Dispatchers.IO) {
+                runCatching {
+                    echo.music.desktop.system.UpdateInstaller.download(info.version, pkg) { p -> _update.value = _update.value.copy(downloading = p) }
+                }.getOrNull()
+            }
+            _update.value = if (file != null) {
+                _update.value.copy(downloading = null, readyVersion = info.version, message = "Echo Music ${info.version} se instalará al cerrar.")
+            } else {
+                _update.value.copy(downloading = null, message = "No se pudo descargar o verificar la versión ${info.version}.")
+            }
+        }
+    }
+
+    /** Asks the window to close; the update installs and Echo Music opens again by itself. */
+    private val _exitRequests = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val exitRequests: kotlinx.coroutines.flow.SharedFlow<Unit> = _exitRequests
+
+    fun restartToUpdate() {
+        if (echo.music.desktop.system.UpdateInstaller.pendingInstaller() == null) return
+        _exitRequests.tryEmit(Unit)
     }
 
     fun openUpdatePage() {
@@ -2624,6 +2661,10 @@ class DesktopAppModel(
         applyContentLocale()
         playerEngine.setPlaybackRate(_prefs.value.playbackSpeed)
         echo.music.desktop.system.WindowsStartup.refresh(_prefs.value.startMinimized)
+        echo.music.desktop.system.UpdateInstaller.takeLastOutcome()?.let { (version, code) ->
+            _statusMessage.value = if (code == 0) "Echo Music se actualizó a la versión $version"
+            else "No se pudo instalar la versión $version (código $code)"
+        }
         if (_prefs.value.checkUpdates && System.currentTimeMillis() - _prefs.value.lastUpdateCheck > 24 * 60 * 60 * 1000L) {
             checkForUpdates(manual = false)
         }
@@ -2680,6 +2721,10 @@ class DesktopAppModel(
         PlaybackSessionStore.save(_queue.value, _currentIndex.value, currentPositionForSession())
         cancelSleepTimer()
         playerEngine.release()
+        // A downloaded update installs now, while Echo Music is closed, and opens it again.
+        if (_prefs.value.autoInstallUpdates && echo.music.desktop.system.UpdateInstaller.canAutoInstall) {
+            echo.music.desktop.system.UpdateInstaller.pendingInstaller()?.let { echo.music.desktop.system.UpdateInstaller.installAfterExit(it) }
+        }
     }
 }
 
@@ -2746,5 +2791,9 @@ data class UpdateState(
     val checking: Boolean = false,
     val available: echo.music.desktop.system.UpdateInfo? = null,
     /** Result of the last check, shown in Settings. */
-    val message: String? = null
+    val message: String? = null,
+    /** Download progress (0..1) of the new version, while it downloads. */
+    val downloading: Float? = null,
+    /** Version downloaded and verified, waiting for Echo Music to close. */
+    val readyVersion: String? = null
 )

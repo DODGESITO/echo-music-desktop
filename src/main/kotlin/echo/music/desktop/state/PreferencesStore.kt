@@ -92,6 +92,8 @@ data class DesktopPreferences(
     val resumeOnHeadphonesReconnect: Boolean = true,
     // --- Actualizaciones ---
     val checkUpdates: Boolean = true,
+    /** Download new versions in the background and install them silently when Echo Music closes. */
+    val autoInstallUpdates: Boolean = true,
     /** GitHub repository ("owner/name") whose releases are checked. */
     val updateRepo: String = echo.music.desktop.system.UpdateChecker.DEFAULT_REPO,
     val lastUpdateCheck: Long = 0L,

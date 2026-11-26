@@ -33,19 +33,26 @@ Instalador:
 .\build-installer.bat
 ```
 
-Deja `EchoMusic-<versión>.exe` en `build\compose\binaries\main\exe`. La primera vez Gradle descarga WiX
-solo. La versión se cambia en `appVersion` de `build.gradle.kts`.
+Deja `EchoMusic-<versión>.msi` (con su `.sha256`) en `build\compose\binaries\main\msi` y
+`EchoMusic-<versión>.exe` en `build\compose\binaries\main\exe`. La primera vez Gradle descarga WiX solo.
+La versión se cambia en `appVersion` de `build.gradle.kts`.
 
-## Publicar una versión
+Se instala solo para el usuario (`%LOCALAPPDATA%\EchoMusic`), así que ni la instalación ni las
+actualizaciones piden permisos de administrador.
 
-El aviso de actualizaciones busca la última *release* de GitHub del repositorio puesto en
-Ajustes → Actualizaciones (por defecto `DODGESITO/echo-music-desktop`). Para avisar de una versión nueva:
+## Publicar una versión (actualización automática)
 
-1. Sube `appVersion` en `build.gradle.kts` y genera el instalador.
-2. Crea una *release* con la etiqueta `v<versión>` (por ejemplo `v1.2.0`) y adjunta el `.exe`.
+Echo Music busca una vez al día la última *release* de GitHub del repositorio puesto en
+Ajustes → Actualizaciones. Si es más nueva, descarga el `.msi`, comprueba su SHA-256 y lo instala solo
+al cerrarse (o con "Reiniciar ahora"), y se vuelve a abrir.
 
-GitHub solo responde sin iniciar sesión si el repositorio es público, así que con el repositorio privado
-el aviso no encuentra nada. Se puede publicar las versiones en otro repositorio público y ponerlo en Ajustes.
+1. Sube `appVersion` en `build.gradle.kts` y ejecuta `build-installer.bat`.
+2. Crea una *release* con la etiqueta `v<versión>` (por ejemplo `v1.2.1`) y adjunta el `.msi`,
+   su `.msi.sha256` y, para instalaciones nuevas, el `.exe`.
+
+Sin una huella SHA-256 (la que GitHub calcula a los archivos subidos, o el `.msi.sha256`) no se instala
+nada automáticamente. GitHub solo responde sin iniciar sesión si el repositorio es público: con el
+repositorio privado la app no encuentra las versiones.
 
 ## Funciones
 
