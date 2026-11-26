@@ -81,6 +81,8 @@ fun ExpandedPlayerModal(
     comments: echo.music.desktop.state.CommentsState = echo.music.desktop.state.CommentsState(),
     onLoadComments: () -> Unit = {},
     onLoadMoreComments: () -> Unit = {},
+    onLoadReplies: (echo.music.desktop.state.SongComment) -> Unit = {},
+    onHideReplies: (echo.music.desktop.state.SongComment) -> Unit = {},
     /** Actions for any song in the queue (⋮ menu). */
     onQueueAddToPlaylist: (SongItem) -> Unit = {},
     onQueueDislike: (SongItem) -> Unit = {},
@@ -849,7 +851,9 @@ fun ExpandedPlayerModal(
                                 state = comments,
                                 songId = currentSong?.id,
                                 onLoad = onLoadComments,
-                                onLoadMore = onLoadMoreComments
+                                onLoadMore = onLoadMoreComments,
+                                onLoadReplies = onLoadReplies,
+                                onHideReplies = onHideReplies
                             )
                         }
 

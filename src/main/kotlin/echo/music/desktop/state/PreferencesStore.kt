@@ -46,6 +46,8 @@ data class DesktopPreferences(
     val contentCountry: String = "",
     // --- Letras: romanización y traducción ---
     /** Show a Latin-letters line under Japanese/Korean/Chinese/Cyrillic/Hindi/Punjabi lyrics. */
+    /** Privacy: while true, played songs are not added to the history nor to Echo Wrapped stats. */
+    val pauseHistory: Boolean = false,
     val lyricsRomanize: Boolean = true,
     /** Folders scanned for local music (Biblioteca → En este PC). */
     val localMusicFolders: List<String> = emptyList(),

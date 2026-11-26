@@ -14,7 +14,9 @@ data class SavedSong(
     val artist: String,
     val thumbnail: String,
     val duration: Int? = null,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    /** Position id of the song inside a YouTube playlist (to move or remove it there). */
+    val setVideoId: String? = null
 ) {
     fun toSongItem(): SongItem {
         return SongItem(
@@ -22,7 +24,8 @@ data class SavedSong(
             title = title,
             artists = listOf(Artist(name = artist, id = null)),
             thumbnail = thumbnail,
-            duration = duration
+            duration = duration,
+            setVideoId = setVideoId
         )
     }
 
@@ -33,7 +36,8 @@ data class SavedSong(
                 title = song.title,
                 artist = song.artists.joinToString(", ") { it.name }.ifEmpty { "Artista desconocido" },
                 thumbnail = song.thumbnail,
-                duration = song.duration
+                duration = song.duration,
+                setVideoId = song.setVideoId
             )
         }
     }
@@ -123,6 +127,12 @@ object FavoritesStore {
         val saved = SavedSong.fromSongItem(song)
         val filtered = currentData.history.filterNot { it.id == song.id }.take(49)
         currentData = currentData.copy(history = listOf(saved) + filtered)
+        save()
+    }
+
+    @Synchronized
+    fun clearHistory() {
+        currentData = currentData.copy(history = emptyList())
         save()
     }
 }

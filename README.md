@@ -73,6 +73,15 @@ git clone https://github.com/EchoMusicApp/Echo-Music.git C:\temp\Echo-Music
 
 El script copia los módulos y archivos que usa la PC y vuelve a aplicar los arreglos de `innertube`.
 
+## Pendiente
+
+- Aparecer en el panel multimedia de Windows (título, artista, portada y botones ⏮ ⏯ ⏭)
+- Isla dinámica flotante en la parte superior de la pantalla, sobre cualquier programa
+- Audífonos Bluetooth: pausar al desconectarse y seguir al reconectarse
+- Mini reproductor flotante, instalador probado, iniciar con Windows y aviso de actualizaciones
+- Del celular: modo video, recomendaciones inteligentes (Music Flow, mezclas, playlists con IA),
+  Jellyfin/Navidrome, biblioteca y Canvas de Spotify, tipografías
+
 ## Licencia
 
 GPL-3.0, igual que Echo Music (ver `LICENSE`). Basado en el trabajo de los autores de Echo Music.

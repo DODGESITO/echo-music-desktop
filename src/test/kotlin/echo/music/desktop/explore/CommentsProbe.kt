@@ -11,6 +11,16 @@ class CommentsProbe {
             println("PROBE comments ok=${r.isSuccess} err=${r.exceptionOrNull()?.message?.take(80)} n=${threads.size} next=${next != null}")
             threads.take(2).forEach { t -> val c = t.comment?.commentRenderer; println("PROBE  ${c?.authorText?.runs?.firstOrNull()?.text} | ${c?.publishedTimeText?.runs?.firstOrNull()?.text} | likes=${c?.voteCount?.runs?.firstOrNull()?.text} | ${c?.contentText?.runs?.joinToString("") { it.text }?.take(60)}") }
             if (next != null) println("PROBE page2 n=${YouTube.commentContinuation(next).getOrNull()?.first?.size}")
+            val withReplies = threads.firstOrNull { (it.comment?.commentRenderer?.replyCount ?: 0) > 0 }
+            val rr = withReplies?.replies?.commentRepliesRenderer
+            val token = rr?.contents?.firstOrNull()?.continuationItemRenderer?.continuationEndpoint?.continuationCommand?.token
+                ?: rr?.viewReplies?.buttonRenderer?.command?.continuationCommand?.token
+                ?: rr?.viewReplies?.buttonRenderer?.navigationEndpoint?.continuationCommand?.token
+            println("PROBE replyCount=${withReplies?.comment?.commentRenderer?.replyCount} token=${token != null}")
+            if (token != null) {
+                val rep = YouTube.commentReplies(token)
+                println("PROBE replies ok=${rep.isSuccess} n=${rep.getOrNull()?.first?.size} more=${rep.getOrNull()?.second != null} first=${rep.getOrNull()?.first?.firstOrNull()?.contentText?.runs?.joinToString("") { it.text }?.take(50)}")
+            }
         }
     }
 }

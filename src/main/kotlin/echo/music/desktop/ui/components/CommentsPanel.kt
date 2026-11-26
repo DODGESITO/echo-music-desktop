@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import echo.music.desktop.state.CommentsState
+import echo.music.desktop.state.SongComment
 import echo.music.desktop.ui.theme.NothingColors
 
 /** YouTube comments of the song playing (expanded player → Comentarios). */
@@ -29,7 +30,9 @@ fun ColumnScope.CommentsPanel(
     state: CommentsState,
     songId: String?,
     onLoad: () -> Unit,
-    onLoadMore: () -> Unit
+    onLoadMore: () -> Unit,
+    onLoadReplies: (SongComment) -> Unit = {},
+    onHideReplies: (SongComment) -> Unit = {}
 ) {
     LaunchedEffect(songId) { if (songId != null) onLoad() }
 
@@ -53,35 +56,41 @@ fun ColumnScope.CommentsPanel(
             verticalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(bottom = 24.dp)
         ) {
-            items(state.comments) { c ->
-                Row {
-                    AsyncImage(
-                        model = c.avatar,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.size(34.dp).clip(CircleShape).background(NothingColors.SurfaceElevated)
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+            items(state.comments, key = { it.id }) { c ->
+                Column {
+                    CommentRow(c, avatarSize = 34)
+                    val thread = state.replies[c.id]
+                    if (c.replyCount > 0 && c.replyToken != null) {
+                        TextButton(
+                            onClick = { if (thread == null) onLoadReplies(c) else onHideReplies(c) },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                            modifier = Modifier.padding(start = 38.dp)
+                        ) {
                             Text(
-                                c.author,
-                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, color = NothingColors.TextPrimary)
+                                if (thread == null) "Ver ${c.replyCount} ${if (c.replyCount == 1) "respuesta" else "respuestas"}" else "Ocultar respuestas",
+                                color = NothingColors.AccentRed,
+                                style = MaterialTheme.typography.labelMedium
                             )
-                            Spacer(Modifier.width(8.dp))
-                            Text(c.time, style = MaterialTheme.typography.labelSmall.copy(color = NothingColors.TextMuted))
                         }
-                        Spacer(Modifier.height(3.dp))
-                        Text(
-                            c.text,
-                            style = MaterialTheme.typography.bodyMedium.copy(color = NothingColors.TextSecondary, lineHeight = 19.sp)
-                        )
-                        if (c.likes.isNotBlank()) {
-                            Spacer(Modifier.height(4.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.ThumbUp, null, tint = NothingColors.TextMuted, modifier = Modifier.size(12.dp))
-                                Spacer(Modifier.width(4.dp))
-                                Text(c.likes, style = MaterialTheme.typography.labelSmall.copy(color = NothingColors.TextMuted))
+                    }
+                    if (thread != null) {
+                        Column(
+                            modifier = Modifier.padding(start = 46.dp, top = 4.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            thread.items.forEach { reply -> CommentRow(reply, avatarSize = 26) }
+                            when {
+                                thread.loading -> CircularProgressIndicator(
+                                    color = NothingColors.AccentRed, modifier = Modifier.size(16.dp), strokeWidth = 2.dp
+                                )
+                                thread.failed && thread.items.isEmpty() -> Text(
+                                    "No se pudieron cargar las respuestas.",
+                                    style = MaterialTheme.typography.labelSmall.copy(color = NothingColors.TextMuted)
+                                )
+                                thread.next != null -> TextButton(
+                                    onClick = { onLoadReplies(c) },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                                ) { Text("Cargar más respuestas", color = NothingColors.AccentRed, style = MaterialTheme.typography.labelMedium) }
                             }
                         }
                     }
@@ -96,6 +105,36 @@ fun ColumnScope.CommentsPanel(
                             TextButton(onClick = onLoadMore) { Text("Cargar más comentarios", color = NothingColors.AccentRed) }
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CommentRow(c: SongComment, avatarSize: Int) {
+    Row {
+        AsyncImage(
+            model = c.avatar,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.size(avatarSize.dp).clip(CircleShape).background(NothingColors.SurfaceElevated)
+        )
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(c.author, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, color = NothingColors.TextPrimary))
+                Spacer(Modifier.width(8.dp))
+                Text(c.time, style = MaterialTheme.typography.labelSmall.copy(color = NothingColors.TextMuted))
+            }
+            Spacer(Modifier.height(3.dp))
+            Text(c.text, style = MaterialTheme.typography.bodyMedium.copy(color = NothingColors.TextSecondary, lineHeight = 19.sp))
+            if (c.likes.isNotBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.ThumbUp, null, tint = NothingColors.TextMuted, modifier = Modifier.size(12.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(c.likes, style = MaterialTheme.typography.labelSmall.copy(color = NothingColors.TextMuted))
                 }
             }
         }

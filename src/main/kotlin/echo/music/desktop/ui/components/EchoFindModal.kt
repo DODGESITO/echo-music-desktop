@@ -38,7 +38,11 @@ fun EchoFindModal(
     onStart: () -> Unit,
     onPlay: (RecognitionResult) -> Unit,
     onSearch: (RecognitionResult) -> Unit,
-    onClose: () -> Unit
+    onClose: () -> Unit,
+    history: List<echo.music.desktop.recognition.RecognizedSong> = emptyList(),
+    onPlayHistory: (echo.music.desktop.recognition.RecognizedSong) -> Unit = {},
+    onSearchHistory: (echo.music.desktop.recognition.RecognizedSong) -> Unit = {},
+    onRemoveHistory: (echo.music.desktop.recognition.RecognizedSong) -> Unit = {}
 ) {
     Box(
         modifier = Modifier
@@ -127,6 +131,60 @@ fun EchoFindModal(
                     }
                 }
             }
+
+            val busy = state is EchoFindState.Listening || state is EchoFindState.Processing
+            if (!busy && history.isNotEmpty()) {
+                Spacer(Modifier.height(18.dp))
+                Text(
+                    "HISTORIAL (${history.size})",
+                    modifier = Modifier.fillMaxWidth(),
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.5.sp, color = NothingColors.TextMuted
+                    )
+                )
+                Spacer(Modifier.height(8.dp))
+                androidx.compose.foundation.lazy.LazyColumn(
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 240.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    items(history.size) { i ->
+                        val song = history[i]
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(NothingColors.Surface)
+                                .clickable { onPlayHistory(song) }
+                                .padding(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            AsyncImage(
+                                model = song.coverUrl,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.size(40.dp).clip(RoundedCornerShape(6.dp)).background(NothingColors.SurfaceElevated)
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(song.title, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold, color = NothingColors.TextPrimary))
+                                Text(
+                                    "${song.artist} • ${formatRecognizedAt(song.recognizedAt)}",
+                                    maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                    style = MaterialTheme.typography.labelSmall.copy(color = NothingColors.TextSecondary)
+                                )
+                            }
+                            IconButton(onClick = { onSearchHistory(song) }, modifier = Modifier.size(30.dp)) {
+                                Icon(Icons.Default.Search, "Buscar", tint = NothingColors.TextMuted, modifier = Modifier.size(16.dp))
+                            }
+                            IconButton(onClick = { onRemoveHistory(song) }, modifier = Modifier.size(30.dp)) {
+                                Icon(Icons.Default.Close, "Quitar del historial", tint = NothingColors.TextMuted, modifier = Modifier.size(16.dp))
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -181,3 +239,7 @@ private fun FoundView(
     Spacer(Modifier.height(6.dp))
     TextButton(onClick = onRetry) { Text("Reconocer otra", color = NothingColors.TextSecondary) }
 }
+
+private fun formatRecognizedAt(millis: Long): String =
+    java.time.format.DateTimeFormatter.ofPattern("d MMM, HH:mm", java.util.Locale("es"))
+        .format(java.time.Instant.ofEpochMilli(millis).atZone(java.time.ZoneId.systemDefault()))

@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -264,9 +265,58 @@ fun PlaybackAndContentSettings(appModel: DesktopAppModel) {
         )
     }
 
+    PrivacySettings(appModel)
+
     ScrobbleSettings(appModel)
 
     BlocksAndBackupSettings(appModel)
+}
+
+@Composable
+private fun PrivacySettings(appModel: DesktopAppModel) {
+    val prefs by appModel.prefs.collectAsState()
+    val history by appModel.history.collectAsState()
+    val recognitions by appModel.recognitionHistory.collectAsState()
+    var confirm by remember { mutableStateOf<String?>(null) }
+
+    SettingsCard(title = "PRIVACIDAD", icon = Icons.Default.Lock) {
+        ToggleRow(
+            title = "Pausar historial",
+            description = "Mientras está activo, lo que escuchas no se guarda en el historial, en Echo Wrapped ni en el historial de Echo Find.",
+            checked = prefs.pauseHistory,
+            onChange = { v -> appModel.updatePreferences { it.copy(pauseHistory = v) } }
+        )
+        Spacer(Modifier.height(10.dp))
+        SettingRowFrame {
+            SettingTexts("Historial de escucha", "${history.size} canciones guardadas.")
+            TextButton(onClick = { confirm = "listen" }, enabled = history.isNotEmpty()) {
+                Text("Borrar", color = if (history.isNotEmpty()) NothingColors.AccentRed else NothingColors.TextMuted)
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+        SettingRowFrame {
+            SettingTexts("Historial de Echo Find", "${recognitions.size} canciones reconocidas.")
+            TextButton(onClick = { confirm = "find" }, enabled = recognitions.isNotEmpty()) {
+                Text("Borrar", color = if (recognitions.isNotEmpty()) NothingColors.AccentRed else NothingColors.TextMuted)
+            }
+        }
+    }
+
+    confirm?.let { which ->
+        AlertDialog(
+            onDismissRequest = { confirm = null },
+            containerColor = NothingColors.SurfaceElevated,
+            title = { Text(if (which == "listen") "¿Borrar el historial de escucha?" else "¿Borrar el historial de Echo Find?", color = NothingColors.TextPrimary) },
+            text = { Text("No se puede deshacer.", color = NothingColors.TextSecondary) },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (which == "listen") appModel.clearListenHistory() else appModel.clearRecognitionHistory()
+                    confirm = null
+                }) { Text("Borrar", color = NothingColors.AccentRed) }
+            },
+            dismissButton = { TextButton(onClick = { confirm = null }) { Text("Cancelar", color = NothingColors.TextSecondary) } }
+        )
+    }
 }
 
 @Composable

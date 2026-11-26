@@ -434,6 +434,8 @@ fun main(args: Array<String>) = application {
                             comments = comments,
                             onLoadComments = { appModel.loadComments() },
                             onLoadMoreComments = { appModel.loadMoreComments() },
+                            onLoadReplies = { appModel.loadReplies(it) },
+                            onHideReplies = { appModel.hideReplies(it) },
                             onQueueAddToPlaylist = { appModel.openAddToPlaylist(listOf(it)) },
                             onQueueDislike = { appModel.dislikeSong(it) },
                             onQueueBlockArtist = { s -> s.artists.firstOrNull()?.let { a -> appModel.blockArtist(a.id, a.name) } },
@@ -536,13 +538,18 @@ fun main(args: Array<String>) = application {
                     }
 
                     val echoFindState by appModel.echoFind.collectAsState()
+                    val recognitionHistory by appModel.recognitionHistory.collectAsState()
                     echoFindState?.let { state ->
                         EchoFindModal(
                             state = state,
                             onStart = { appModel.startEchoFind() },
                             onPlay = { appModel.playRecognized(it) },
                             onSearch = { appModel.searchRecognized(it) },
-                            onClose = { appModel.closeEchoFind() }
+                            onClose = { appModel.closeEchoFind() },
+                            history = recognitionHistory,
+                            onPlayHistory = { appModel.playRecognizedSong(it) },
+                            onSearchHistory = { appModel.searchRecognizedSong(it) },
+                            onRemoveHistory = { appModel.removeRecognition(it) }
                         )
                     }
 

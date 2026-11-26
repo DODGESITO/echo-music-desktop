@@ -17,6 +17,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontFamily
@@ -53,6 +54,23 @@ fun PlaylistDetailModal(
     val userPlaylists by appModel.userPlaylists.collectAsState()
     // Opened from Home/search and not saved yet: offer "Guardar" instead of sync/delete.
     val isInLibrary = userPlaylists.any { it.id == playlist.id }
+    val ytAccount by appModel.youtubeAccount.collectAsState()
+    val canEdit = remember(playlist, userPlaylists, ytAccount) { appModel.canEditPlaylist(playlist) }
+    val canRemove = remember(playlist, userPlaylists, ytAccount) { appModel.canRemoveFromPlaylist(playlist) }
+    var reorderMode by remember(playlist.id) { mutableStateOf(false) }
+    var renaming by remember(playlist.id) { mutableStateOf(false) }
+
+    if (renaming) {
+        RenamePlaylistDialog(
+            appModel = appModel,
+            current = playlist.title,
+            onDismiss = { renaming = false },
+            onConfirm = { newTitle ->
+                renaming = false
+                appModel.renamePlaylist(playlist.id, newTitle)
+            }
+        )
+    }
 
     // Semi-transparent backdrop
     Box(
@@ -194,15 +212,23 @@ fun PlaylistDetailModal(
                             )
                         }
 
-                        Text(
-                            text = playlist.title,
-                            style = MaterialTheme.typography.headlineSmall.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = NothingColors.TextPrimary
-                            ),
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = playlist.title,
+                                style = MaterialTheme.typography.headlineSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = NothingColors.TextPrimary
+                                ),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                            if (canEdit) {
+                                IconButton(onClick = { renaming = true }, modifier = Modifier.size(34.dp)) {
+                                    Icon(Icons.Default.Edit, "Renombrar playlist", tint = NothingColors.TextMuted, modifier = Modifier.size(18.dp))
+                                }
+                            }
+                        }
 
                         Text(
                             text = "${playlist.author} • ${playlist.songs.size} canciones",
@@ -218,6 +244,23 @@ fun PlaylistDetailModal(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
+                            if (canEdit && playlist.songs.size > 1) {
+                                OutlinedButton(
+                                    onClick = { reorderMode = !reorderMode },
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        contentColor = if (reorderMode) NothingColors.AccentRed else Color.White
+                                    ),
+                                    border = androidx.compose.foundation.BorderStroke(
+                                        1.dp, if (reorderMode) NothingColors.AccentRed else NothingColors.SurfaceBorder
+                                    ),
+                                    shape = RoundedCornerShape(10.dp),
+                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+                                ) {
+                                    Icon(Icons.Default.SwapVert, null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(if (reorderMode) "Listo" else "Ordenar")
+                                }
+                            }
                             if (playlist.songs.isNotEmpty()) {
                                 Button(
                                     onClick = {
@@ -533,6 +576,24 @@ fun PlaylistDetailModal(
                                     )
                                 }
 
+                                // Reorder arrows
+                                if (reorderMode) {
+                                    IconButton(
+                                        onClick = { appModel.moveSongInPlaylist(playlist.id, index, index - 1) },
+                                        enabled = index > 0,
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(Icons.Default.KeyboardArrowUp, "Subir", tint = if (index > 0) NothingColors.TextPrimary else NothingColors.SurfaceBorder, modifier = Modifier.size(20.dp))
+                                    }
+                                    IconButton(
+                                        onClick = { appModel.moveSongInPlaylist(playlist.id, index, index + 1) },
+                                        enabled = index < playlist.songs.lastIndex,
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(Icons.Default.KeyboardArrowDown, "Bajar", tint = if (index < playlist.songs.lastIndex) NothingColors.TextPrimary else NothingColors.SurfaceBorder, modifier = Modifier.size(20.dp))
+                                    }
+                                }
+
                                 // Add to another playlist
                                 IconButton(
                                     onClick = { appModel.openAddToPlaylist(listOf(song)) },
@@ -546,8 +607,8 @@ fun PlaylistDetailModal(
                                     )
                                 }
 
-                                // Remove from this playlist (local/imported copies only; YouTube needs extra ids)
-                                if (playlist.sourceType != PlaylistSourceType.YOUTUBE_MUSIC && isInLibrary) {
+                                // Remove from this playlist (also from your YouTube Music playlists / "Me gusta")
+                                if (canRemove) {
                                     IconButton(
                                         onClick = { appModel.removeSongFromPlaylist(playlist.id, song.id) },
                                         modifier = Modifier.size(32.dp)
@@ -637,4 +698,43 @@ fun PlaylistDetailModal(
             }
         }
     }
+}
+
+@Composable
+private fun RenamePlaylistDialog(
+    appModel: DesktopAppModel,
+    current: String,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    var name by remember { mutableStateOf(current) }
+    DisposableEffect(Unit) { onDispose { appModel.isInputFocused = false } }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = NothingColors.SurfaceElevated,
+        title = { Text("Renombrar playlist", color = NothingColors.TextPrimary) },
+        text = {
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it.take(150) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth().onFocusChanged { appModel.isInputFocused = it.isFocused },
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = NothingColors.AccentRed,
+                    unfocusedBorderColor = NothingColors.SurfaceBorder,
+                    cursorColor = NothingColors.AccentRed,
+                    focusedTextColor = NothingColors.TextPrimary,
+                    unfocusedTextColor = NothingColors.TextPrimary
+                )
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(name) }, enabled = name.isNotBlank() && name.trim() != current) {
+                Text("Guardar", color = NothingColors.AccentRed)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancelar", color = NothingColors.TextSecondary) }
+        }
+    )
 }

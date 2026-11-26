@@ -432,15 +432,57 @@ class DesktopAppModel(
 
     private fun toComment(t: com.music.innertube.models.comment.CommentThreadRenderer): SongComment? {
         val c = t.comment?.commentRenderer ?: return null
+        // Same lookup as the phone app's comment sheet for the "view replies" continuation.
+        val replies = t.replies?.commentRepliesRenderer
+        val token = replies?.contents?.firstOrNull()?.continuationItemRenderer?.continuationEndpoint?.continuationCommand?.token
+            ?: replies?.viewReplies?.buttonRenderer?.command?.continuationCommand?.token
+            ?: replies?.viewReplies?.buttonRenderer?.navigationEndpoint?.continuationCommand?.token
+        return toSongComment(c, token)
+    }
+
+    private fun toSongComment(c: com.music.innertube.models.comment.CommentRenderer, replyToken: String? = null): SongComment? {
         val text = c.contentText?.runs?.joinToString("") { it.text }.orEmpty()
         if (text.isBlank()) return null
         return SongComment(
+            id = c.commentId ?: "${c.authorText?.runs?.firstOrNull()?.text}|${text.hashCode()}",
             author = c.authorText?.runs?.firstOrNull()?.text.orEmpty(),
             avatar = c.authorThumbnail?.thumbnails?.lastOrNull()?.url,
             time = c.publishedTimeText?.runs?.firstOrNull()?.text.orEmpty(),
             text = text,
-            likes = c.voteCount?.runs?.firstOrNull()?.text.orEmpty().takeIf { it != "0" }.orEmpty()
+            likes = c.voteCount?.runs?.firstOrNull()?.text.orEmpty().takeIf { it != "0" }.orEmpty(),
+            replyCount = c.replyCount ?: 0,
+            replyToken = replyToken
         )
+    }
+
+    /** Shows (or loads more of) the replies of a comment. */
+    fun loadReplies(comment: SongComment) {
+        val state = _comments.value
+        val current = state.replies[comment.id]
+        if (current?.loading == true) return
+        val token = if (current == null) comment.replyToken else current.next
+        if (token == null) return
+        val videoId = state.videoId
+        _comments.value = state.copy(replies = state.replies + (comment.id to (current ?: ReplyThread()).copy(loading = true)))
+        scope.launch {
+            val result = withContext(Dispatchers.IO) { YouTube.commentReplies(token) }
+            val now = _comments.value
+            if (now.videoId != videoId) return@launch
+            val before = now.replies[comment.id] ?: ReplyThread()
+            val (renderers, next) = result.getOrNull() ?: (emptyList<com.music.innertube.models.comment.CommentRenderer>() to null)
+            _comments.value = now.copy(
+                replies = now.replies + (comment.id to before.copy(
+                    items = before.items + renderers.mapNotNull { toSongComment(it) },
+                    next = next,
+                    loading = false,
+                    failed = result.isFailure
+                ))
+            )
+        }
+    }
+
+    fun hideReplies(comment: SongComment) {
+        _comments.value = _comments.value.let { it.copy(replies = it.replies - comment.id) }
     }
 
     /** Loads the first page of comments of the song playing (once per song). */
@@ -522,7 +564,12 @@ class DesktopAppModel(
             _echoFind.value = EchoFindState.Processing
             val result = echo.music.desktop.recognition.EchoFindService.recognize(pcm)
             _echoFind.value = result.fold(
-                onSuccess = { EchoFindState.Found(it) },
+                onSuccess = {
+                    if (!_prefs.value.pauseHistory) {
+                        _recognitionHistory.value = echo.music.desktop.recognition.RecognitionHistoryStore.add(toRecognized(it))
+                    }
+                    EchoFindState.Found(it)
+                },
                 onFailure = { e ->
                     if (e.message?.contains("match", ignoreCase = true) == true) EchoFindState.NoMatch
                     else EchoFindState.Failed("No se pudo identificar: ${e.message}")
@@ -531,33 +578,59 @@ class DesktopAppModel(
         }
     }
 
-    /** Plays the recognized song: by its YouTube id when Shazam knows it, otherwise the best search match. */
-    fun playRecognized(result: com.music.shazamkit.models.RecognitionResult) {
+    private val _recognitionHistory = MutableStateFlow(echo.music.desktop.recognition.RecognitionHistoryStore.load())
+    /** Songs identified with Echo Find, newest first. */
+    val recognitionHistory: StateFlow<List<echo.music.desktop.recognition.RecognizedSong>> = _recognitionHistory.asStateFlow()
+
+    private fun toRecognized(r: com.music.shazamkit.models.RecognitionResult) = echo.music.desktop.recognition.RecognizedSong(
+        title = r.title,
+        artist = r.artist,
+        album = r.album,
+        coverUrl = r.coverArtHqUrl ?: r.coverArtUrl,
+        youtubeVideoId = r.youtubeVideoId
+    )
+
+    fun playRecognized(result: com.music.shazamkit.models.RecognitionResult) = playRecognizedSong(toRecognized(result))
+
+    fun searchRecognized(result: com.music.shazamkit.models.RecognitionResult) = searchRecognizedSong(toRecognized(result))
+
+    /** Plays a recognized song: by its YouTube id when Shazam knows it, otherwise the best search match. */
+    fun playRecognizedSong(song: echo.music.desktop.recognition.RecognizedSong) {
         closeEchoFind()
         scope.launch {
-            val videoId = result.youtubeVideoId
+            val videoId = song.youtubeVideoId
             if (!videoId.isNullOrBlank()) {
                 playSong(
                     SongItem(
                         id = videoId,
-                        title = result.title,
-                        artists = listOf(com.music.innertube.models.Artist(name = result.artist, id = null)),
-                        thumbnail = result.coverArtHqUrl ?: result.coverArtUrl ?: ""
+                        title = song.title,
+                        artists = listOf(com.music.innertube.models.Artist(name = song.artist, id = null)),
+                        thumbnail = song.coverUrl ?: ""
                     )
                 )
                 return@launch
             }
             val match = withContext(Dispatchers.IO) {
-                YouTube.search("${result.title} ${result.artist}", YouTube.SearchFilter.FILTER_SONG)
+                YouTube.search("${song.title} ${song.artist}", YouTube.SearchFilter.FILTER_SONG)
             }.getOrNull()?.items?.filterIsInstance<SongItem>()?.firstOrNull()
-            if (match != null) playSong(match) else _statusMessage.value = "No se encontró \"${result.title}\" en YouTube Music"
+            if (match != null) playSong(match) else _statusMessage.value = "No se encontró \"${song.title}\" en YouTube Music"
         }
     }
 
-    fun searchRecognized(result: com.music.shazamkit.models.RecognitionResult) {
+    fun searchRecognizedSong(song: echo.music.desktop.recognition.RecognizedSong) {
         closeEchoFind()
         selectTab(NavigationTab.EXPLORE)
-        search("${result.title} ${result.artist}")
+        search("${song.title} ${song.artist}")
+    }
+
+    fun removeRecognition(song: echo.music.desktop.recognition.RecognizedSong) {
+        _recognitionHistory.value = echo.music.desktop.recognition.RecognitionHistoryStore.remove(song)
+    }
+
+    fun clearRecognitionHistory() {
+        echo.music.desktop.recognition.RecognitionHistoryStore.clear()
+        _recognitionHistory.value = emptyList()
+        _statusMessage.value = "Historial de Echo Find borrado"
     }
 
     // --- Canvas (portada animada) ---
@@ -616,6 +689,7 @@ class DesktopAppModel(
         _userPlaylists.value = PlaylistStore.getPlaylists()
         _contentBlocks.value = ContentBlockStore.current
         _equalizerSettings.value = EqualizerStore.getSettings()
+        _recognitionHistory.value = echo.music.desktop.recognition.RecognitionHistoryStore.load()
         playerEngine.setEqualizerEnabled(_equalizerSettings.value.enabled)
         playerEngine.setEqualizerBands(_equalizerSettings.value.bandGains)
         playerEngine.setPlaybackRate(_prefs.value.playbackSpeed)
@@ -1287,9 +1361,11 @@ class DesktopAppModel(
         // Broadcast track change to Listen Together room if active
         if (!LocalMusicLibrary.isLocal(song.id)) listenTogetherManager.broadcastTrackChange(song)
 
-        // Record history
-        FavoritesStore.addToHistory(song)
-        _history.value = FavoritesStore.getHistory()
+        // Record history (unless the user paused it: "historial privado")
+        if (!_prefs.value.pauseHistory) {
+            FavoritesStore.addToHistory(song)
+            _history.value = FavoritesStore.getHistory()
+        }
 
         // Asynchronously fetch lyrics via LRCLIB
         _isLyricsLoading.value = true
@@ -1503,8 +1579,8 @@ class DesktopAppModel(
     }
 
     private fun handleTrackEnded() {
-        // Record listening stats for Echo Wrapped
-        _currentSong.value?.let { current ->
+        // Record listening stats for Echo Wrapped (not while the history is paused)
+        _currentSong.value?.takeIf { !_prefs.value.pauseHistory }?.let { current ->
             val durSec = current.duration ?: (playbackState.value.durationMs / 1000L).toInt()
             StatsStore.recordPlayback(current, durSec)
         }
@@ -2041,14 +2117,120 @@ class DesktopAppModel(
     }
 
     /** Removes a song from a local (or imported Spotify) playlist. */
-    fun removeSongFromPlaylist(playlistId: String, songId: String) {
-        val playlist = PlaylistStore.getPlaylist(playlistId) ?: return
-        if (playlist.sourceType == PlaylistSourceType.YOUTUBE_MUSIC) return
-        val updated = playlist.copy(savedSongs = playlist.savedSongs.filterNot { it.id == songId })
+    // --- Privacidad ---
+    fun clearListenHistory() {
+        FavoritesStore.clearHistory()
+        _history.value = emptyList()
+        _statusMessage.value = "Historial de escucha borrado"
+    }
+
+    // --- Editar playlists: renombrar, reordenar, quitar canciones ---
+    private fun isYouTubePlaylist(p: UserPlaylist) = p.sourceType == PlaylistSourceType.YOUTUBE_MUSIC
+
+    /** Rename/reorder: local, imported Spotify, and your own YouTube Music playlists (not "Me gusta"). */
+    fun canEditPlaylist(p: UserPlaylist): Boolean {
+        if (!isPlaylistInLibrary(p.id) || p.sourceType == PlaylistSourceType.PODCAST) return false
+        if (isYouTubePlaylist(p)) return _youtubeAccount.value != null && p.id != "yt_LM" && p.id != "yt_SE"
+        return true
+    }
+
+    /** Remove songs: like [canEditPlaylist], plus "Me gusta" (removing = unliking). */
+    fun canRemoveFromPlaylist(p: UserPlaylist): Boolean =
+        canEditPlaylist(p) || (p.id == "yt_LM" && _youtubeAccount.value != null && isPlaylistInLibrary(p.id))
+
+    private fun savePlaylistUpdate(updated: UserPlaylist) {
         PlaylistStore.savePlaylist(updated)
         _userPlaylists.value = PlaylistStore.getPlaylists()
-        if (_selectedPlaylistDetail.value?.id == playlistId) _selectedPlaylistDetail.value = updated
-        _statusMessage.value = "Canción quitada de \"${playlist.title}\""
+        if (_selectedPlaylistDetail.value?.id == updated.id) _selectedPlaylistDetail.value = updated
+    }
+
+    /**
+     * YouTube needs each song's setVideoId to move/remove it. Playlists synced before this was
+     * stored don't have them, so they are fetched again once and merged in.
+     */
+    private suspend fun withSetVideoIds(p: UserPlaylist): UserPlaylist {
+        if (!isYouTubePlaylist(p) || p.savedSongs.all { it.setVideoId != null }) return p
+        val fresh = YouTubeSyncService.fetchPlaylistSongs(p.id.removePrefix("yt_"))
+        if (fresh.isEmpty()) return p
+        val remaining = fresh.groupBy { it.id }.mapValues { it.value.toMutableList() }
+        val merged = p.copy(savedSongs = p.savedSongs.map { s ->
+            if (s.setVideoId != null) s else s.copy(setVideoId = remaining[s.id]?.removeFirstOrNull()?.setVideoId)
+        })
+        savePlaylistUpdate(merged)
+        return merged
+    }
+
+    fun renamePlaylist(playlistId: String, newTitle: String) {
+        val title = newTitle.trim()
+        val playlist = PlaylistStore.getPlaylist(playlistId) ?: return
+        if (title.isEmpty() || title == playlist.title || !canEditPlaylist(playlist)) return
+        scope.launch {
+            if (isYouTubePlaylist(playlist)) {
+                val ok = withContext(Dispatchers.IO) { YouTube.renamePlaylist(playlist.id.removePrefix("yt_"), title) }.isSuccess
+                if (!ok) {
+                    _statusMessage.value = "YouTube Music no permitió renombrar \"${playlist.title}\""
+                    return@launch
+                }
+            }
+            savePlaylistUpdate(playlist.copy(title = title))
+            _statusMessage.value = "Playlist renombrada a \"$title\""
+        }
+    }
+
+    /** Moves the song at [from] to position [to] (also on YouTube Music for your own playlists). */
+    fun moveSongInPlaylist(playlistId: String, from: Int, to: Int) {
+        val original = PlaylistStore.getPlaylist(playlistId) ?: return
+        if (!canEditPlaylist(original) || from !in original.savedSongs.indices || to !in original.savedSongs.indices || from == to) return
+        val reordered = original.savedSongs.toMutableList().apply { add(to, removeAt(from)) }
+        // Optimistic: show the new order right away, undo if YouTube refuses.
+        savePlaylistUpdate(original.copy(savedSongs = reordered))
+        if (!isYouTubePlaylist(original)) return
+        scope.launch {
+            val withIds = withSetVideoIds(original)
+            val songs = withIds.savedSongs.toMutableList().apply { add(to, removeAt(from)) }
+            val moved = songs[to].setVideoId
+            val successor = songs.getOrNull(to + 1)?.setVideoId
+            val ok = moved != null && withContext(Dispatchers.IO) {
+                YouTube.moveSongPlaylist(withIds.id.removePrefix("yt_"), moved, successor)
+            }.isSuccess
+            if (ok) {
+                savePlaylistUpdate(withIds.copy(savedSongs = songs))
+            } else {
+                savePlaylistUpdate(withIds)
+                _statusMessage.value = "No se pudo cambiar el orden en YouTube Music"
+            }
+        }
+    }
+
+    /** Removes a song from a playlist; for YouTube Music playlists also from your account. */
+    fun removeSongFromPlaylist(playlistId: String, songId: String) {
+        val playlist = PlaylistStore.getPlaylist(playlistId) ?: return
+        if (!canRemoveFromPlaylist(playlist)) return
+        val song = playlist.savedSongs.firstOrNull { it.id == songId } ?: return
+        if (!isYouTubePlaylist(playlist)) {
+            savePlaylistUpdate(playlist.copy(savedSongs = playlist.savedSongs.filterNot { it.id == songId }))
+            _statusMessage.value = "Canción quitada de \"${playlist.title}\""
+            return
+        }
+        scope.launch {
+            val ok = if (playlist.id == "yt_LM") {
+                // "Me gusta" is not a normal playlist: removing a song means un-liking it.
+                withContext(Dispatchers.IO) { YouTube.likeVideo(songId, false) }.isSuccess
+            } else {
+                val withIds = withSetVideoIds(playlist)
+                val setVideoId = withIds.savedSongs.firstOrNull { it.id == songId }?.setVideoId
+                setVideoId != null && withContext(Dispatchers.IO) {
+                    YouTube.removeFromPlaylist(playlist.id.removePrefix("yt_"), songId, setVideoId)
+                }.isSuccess
+            }
+            if (ok) {
+                val latest = PlaylistStore.getPlaylist(playlistId) ?: playlist
+                savePlaylistUpdate(latest.copy(savedSongs = latest.savedSongs.filterNot { it.id == songId }))
+                _statusMessage.value = "\"${song.title}\" quitada de \"${playlist.title}\""
+            } else {
+                _statusMessage.value = "YouTube Music no permitió quitar \"${song.title}\""
+            }
+        }
     }
 
     // --- Prioridad 2: Radio Infinita (Automix) ---
@@ -2413,7 +2595,25 @@ data class LyricsExtras(
     val translationError: String? = null
 )
 
-data class SongComment(val author: String, val avatar: String?, val time: String, val text: String, val likes: String)
+data class SongComment(
+    val id: String,
+    val author: String,
+    val avatar: String?,
+    val time: String,
+    val text: String,
+    val likes: String,
+    val replyCount: Int = 0,
+    /** Token to load the replies (null when the comment has none). */
+    val replyToken: String? = null
+)
+
+/** Replies of one comment that the user opened. */
+data class ReplyThread(
+    val items: List<SongComment> = emptyList(),
+    val next: String? = null,
+    val loading: Boolean = false,
+    val failed: Boolean = false
+)
 
 data class CommentsState(
     val videoId: String = "",
@@ -2421,7 +2621,9 @@ data class CommentsState(
     val continuation: String? = null,
     val loading: Boolean = false,
     /** Shown when there are no comments (error, local song...). */
-    val message: String? = null
+    val message: String? = null,
+    /** Opened reply threads, by comment id. */
+    val replies: Map<String, ReplyThread> = emptyMap()
 )
 
 sealed class EchoFindState {

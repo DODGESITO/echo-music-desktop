@@ -24,7 +24,8 @@ object BackupService {
         "stats.json",
         "preferences.json",
         "equalizer.json",
-        "blocked.json"
+        "blocked.json",
+        "recognition_history.json"
     )
 
     private const val MAX_ENTRY_BYTES = 50L * 1024 * 1024
