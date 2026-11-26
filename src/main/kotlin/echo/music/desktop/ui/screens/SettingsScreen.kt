@@ -948,6 +948,9 @@ fun SettingsScreen(
             }
 
             Spacer(modifier = Modifier.height(10.dp))
+            IslandSettingsRows(appModel)
+
+            Spacer(modifier = Modifier.height(10.dp))
             StartupSettingsRows(appModel)
 
             Spacer(modifier = Modifier.height(14.dp))

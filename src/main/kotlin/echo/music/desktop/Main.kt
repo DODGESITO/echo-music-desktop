@@ -140,6 +140,17 @@ fun main(args: Array<String>) = application {
         }
     )
 
+    val livePrefs by appModel.prefs.collectAsState()
+    if (livePrefs.dynamicIsland) {
+        echo.music.desktop.ui.island.DynamicIslandWindow(
+            appModel = appModel,
+            onOpenApp = {
+                isMiniPlayerOpen = false
+                isWindowVisible = true
+            }
+        )
+    }
+
     if (isMiniPlayerOpen) {
         echo.music.desktop.ui.components.MiniPlayerWindow(
             appModel = appModel,

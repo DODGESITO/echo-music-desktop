@@ -63,6 +63,7 @@ el aviso no encuentra nada. Se puede publicar las versiones en otro repositorio 
 - Historial privado (pausar y borrar), historial de Echo Find, editar playlists y respuestas a comentarios
 - Mini reproductor siempre visible (Ctrl + M), iniciar con Windows y aviso de versiones nuevas
 - Panel multimedia de Windows: título, artista, portada, ⏮ ⏯ ⏭ y barra para adelantar (también con la app en la bandeja)
+- Isla dinámica arriba de la pantalla: hora, reproductor, cola, controles y letra sincronizada al pasar el mouse
 - La cookie de YouTube y las claves se guardan cifradas con Windows (DPAPI)
 
 Los datos del usuario se guardan en `%USERPROFILE%\.echomusic`.
@@ -92,7 +93,6 @@ El script copia los módulos y archivos que usa la PC y vuelve a aplicar los arr
 
 ## Pendiente
 
-- Isla dinámica flotante en la parte superior de la pantalla, sobre cualquier programa
 - Audífonos Bluetooth: pausar al desconectarse y seguir al reconectarse
 - Del celular: modo video, recomendaciones inteligentes (Music Flow, mezclas, playlists con IA),
   Jellyfin/Navidrome, biblioteca y Canvas de Spotify, tipografías

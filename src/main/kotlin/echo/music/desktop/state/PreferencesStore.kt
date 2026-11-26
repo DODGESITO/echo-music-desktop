@@ -79,6 +79,12 @@ data class DesktopPreferences(
     /** Last position of the mini player (dp, screen coordinates). */
     val miniPlayerX: Int? = null,
     val miniPlayerY: Int? = null,
+    // --- Isla dinámica ---
+    val dynamicIsland: Boolean = true,
+    /** Hide it while a game, video or presentation is full screen. */
+    val islandHideFullscreen: Boolean = true,
+    /** Show the clock pill even when nothing is playing. */
+    val islandShowIdle: Boolean = true,
     // --- Actualizaciones ---
     val checkUpdates: Boolean = true,
     /** GitHub repository ("owner/name") whose releases are checked. */

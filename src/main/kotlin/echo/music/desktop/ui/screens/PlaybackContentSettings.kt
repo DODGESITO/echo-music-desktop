@@ -694,6 +694,34 @@ private fun DropdownRow(
     }
 }
 
+/** Dynamic island options (inside the system integration card). */
+@Composable
+fun IslandSettingsRows(appModel: DesktopAppModel) {
+    val prefs by appModel.prefs.collectAsState()
+    ToggleRow(
+        title = "Isla dinámica",
+        description = "Una píldora arriba de la pantalla, encima de cualquier programa. Pasa el mouse para ver el reproductor, la cola, los controles y la letra.",
+        checked = prefs.dynamicIsland,
+        onChange = { v -> appModel.updatePreferences { it.copy(dynamicIsland = v) } }
+    )
+    if (prefs.dynamicIsland) {
+        Spacer(Modifier.height(10.dp))
+        ToggleRow(
+            title = "Ocultar en pantalla completa",
+            description = "Se esconde mientras juegas o ves un video a pantalla completa.",
+            checked = prefs.islandHideFullscreen,
+            onChange = { v -> appModel.updatePreferences { it.copy(islandHideFullscreen = v) } }
+        )
+        Spacer(Modifier.height(10.dp))
+        ToggleRow(
+            title = "Mostrar sin música",
+            description = "Deja la hora visible aunque no suene nada.",
+            checked = prefs.islandShowIdle,
+            onChange = { v -> appModel.updatePreferences { it.copy(islandShowIdle = v) } }
+        )
+    }
+}
+
 /** "Iniciar con Windows" and "Abrir en la bandeja" rows (inside the system integration card). */
 @Composable
 fun StartupSettingsRows(appModel: DesktopAppModel) {
