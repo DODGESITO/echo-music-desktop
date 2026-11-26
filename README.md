@@ -62,6 +62,7 @@ el aviso no encuentra nada. Se puede publicar las versiones en otro repositorio 
 - Last.fm y ListenBrainz, bloqueo de artistas y "No me gusta", copia de seguridad, temas de color
 - Historial privado (pausar y borrar), historial de Echo Find, editar playlists y respuestas a comentarios
 - Mini reproductor siempre visible (Ctrl + M), iniciar con Windows y aviso de versiones nuevas
+- Panel multimedia de Windows: título, artista, portada, ⏮ ⏯ ⏭ y barra para adelantar (también con la app en la bandeja)
 - La cookie de YouTube y las claves se guardan cifradas con Windows (DPAPI)
 
 Los datos del usuario se guardan en `%USERPROFILE%\.echomusic`.
@@ -91,7 +92,6 @@ El script copia los módulos y archivos que usa la PC y vuelve a aplicar los arr
 
 ## Pendiente
 
-- Aparecer en el panel multimedia de Windows (título, artista, portada y botones ⏮ ⏯ ⏭)
 - Isla dinámica flotante en la parte superior de la pantalla, sobre cualquier programa
 - Audífonos Bluetooth: pausar al desconectarse y seguir al reconectarse
 - Del celular: modo video, recomendaciones inteligentes (Music Flow, mezclas, playlists con IA),

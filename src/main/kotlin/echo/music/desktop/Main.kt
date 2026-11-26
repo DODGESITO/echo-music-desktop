@@ -13,6 +13,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.*
 import echo.music.desktop.state.DesktopAppModel
+import kotlinx.coroutines.launch
 import echo.music.desktop.state.NavigationTab
 import echo.music.desktop.state.PreferencesStore
 import echo.music.desktop.system.GlobalMediaKeys
@@ -85,11 +86,15 @@ fun main(args: Array<String>) = application {
     val currentSong by appModel.currentSong.collectAsState()
     val playbackState by appModel.playbackState.collectAsState()
 
+    // Windows media panel: once connected, Windows itself sends the keyboard media keys to it.
+    var mediaPanelActive by remember { mutableStateOf(false) }
+
     // System-wide media keys (Windows). While active, the window ignores those keys to avoid double actions.
     val globalMediaKeysEnabled by appModel.globalMediaKeysEnabled.collectAsState()
     var globalMediaKeysActive by remember { mutableStateOf(false) }
-    DisposableEffect(globalMediaKeysEnabled) {
-        globalMediaKeysActive = globalMediaKeysEnabled && GlobalMediaKeys.start { appModel.onMediaKey(it) }
+    DisposableEffect(globalMediaKeysEnabled, mediaPanelActive) {
+        globalMediaKeysActive = mediaPanelActive ||
+            (globalMediaKeysEnabled && GlobalMediaKeys.start { appModel.onMediaKey(it) })
         onDispose {
             GlobalMediaKeys.stop()
             globalMediaKeysActive = false
@@ -271,6 +276,60 @@ fun main(args: Array<String>) = application {
             }
         }
     ) {
+        // Windows media panel (title, artist, cover, ⏮ ⏯ ⏭ and progress next to the volume indicator).
+        val mainWindow = window
+        LaunchedEffect(Unit) {
+            // Started in the tray the window was never shown: give it its native handle anyway.
+            if (!mainWindow.isDisplayable) mainWindow.addNotify()
+            val hwnd = mainWindow.windowHandle
+            val started = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                echo.music.desktop.system.WindowsMediaControls.start(
+                    hwnd,
+                    onButton = { button ->
+                        javax.swing.SwingUtilities.invokeLater {
+                            val playing = appModel.playbackState.value.isPlaying
+                            when (button) {
+                                echo.music.desktop.system.MediaControlButton.PLAY -> if (!playing) appModel.togglePlayPause()
+                                echo.music.desktop.system.MediaControlButton.PAUSE -> if (playing) appModel.togglePlayPause()
+                                echo.music.desktop.system.MediaControlButton.STOP -> appModel.onMediaKey(MediaKey.STOP)
+                                echo.music.desktop.system.MediaControlButton.NEXT -> appModel.onMediaKey(MediaKey.NEXT)
+                                echo.music.desktop.system.MediaControlButton.PREVIOUS -> appModel.onMediaKey(MediaKey.PREVIOUS)
+                            }
+                        }
+                    },
+                    onSeek = { ms -> javax.swing.SwingUtilities.invokeLater { appModel.seekToPositionMs(ms) } }
+                )
+            }
+            mediaPanelActive = started
+            if (!started) return@LaunchedEffect
+            launch {
+                appModel.currentSong.collect { song ->
+                    echo.music.desktop.system.WindowsMediaControls.updateSong(
+                        songId = song?.id,
+                        title = song?.title.orEmpty(),
+                        artist = song?.artists?.joinToString(", ") { it.name }.orEmpty(),
+                        thumbnailUrl = song?.thumbnail
+                    )
+                }
+            }
+            launch {
+                appModel.playbackState.collect { state ->
+                    echo.music.desktop.system.WindowsMediaControls.updatePlayback(
+                        hasSong = appModel.currentSong.value != null,
+                        isPlaying = state.isPlaying,
+                        positionMs = state.currentPositionMs,
+                        durationMs = state.durationMs
+                    )
+                }
+            }
+        }
+        DisposableEffect(Unit) {
+            onDispose {
+                echo.music.desktop.system.WindowsMediaControls.stop()
+                mediaPanelActive = false
+            }
+        }
+
         EchoDesktopTheme {
             Surface(
                 modifier = Modifier.fillMaxSize(),

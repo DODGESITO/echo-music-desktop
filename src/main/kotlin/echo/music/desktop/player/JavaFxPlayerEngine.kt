@@ -60,6 +60,14 @@ class JavaFxPlayerEngine : AudioPlayerEngine {
 
     private var trackEndedCallback: (() -> Unit)? = null
 
+    // Seeking in streamed songs (all FX thread except the copy download).
+    private var generation = 0
+    private var streamUrl: String? = null
+    private var seekableCopy: java.io.File? = null
+    private var usingCopy = false
+    private var pendingSeekMs: Long? = null
+    private var copyJob: Job? = null
+
     init {
         ensureFxInitialized()
     }
@@ -80,62 +88,88 @@ class JavaFxPlayerEngine : AudioPlayerEngine {
         }
 
         Platform.runLater {
-            try {
-                mediaPlayer?.stop()
-                mediaPlayer?.dispose()
-
-                val media = Media(url)
-                val player = MediaPlayer(media)
-                mediaPlayer = player
-
-                // Apply initial volume (with normalization) and speed
-                player.volume = effectiveVolume()
-                player.rate = playbackRate
-
-                // Apply hardware/native AudioEqualizer
-                try {
-                    val eq = player.audioEqualizer
-                    eq.isEnabled = currentEqEnabled
-                    for (i in 0 until minOf(eq.bands.size, currentEqGains.size)) {
-                        eq.bands[i].gain = currentEqGains[i].toDouble()
-                    }
-                } catch (ignored: Throwable) {}
-
-                player.setOnReady {
-                    val actualDuration = media.duration.toMillis().toLong().coerceAtLeast(durationMs)
-                    _state.update { it.copy(durationMs = actualDuration, isBuffering = false, isPlaying = true) }
-                    player.rate = playbackRate
-                    player.play()
-                    startProgressTracking()
-                }
-
-                player.setOnPlaying {
-                    _state.update { it.copy(isPlaying = true, isBuffering = false) }
-                }
-
-                player.setOnPaused {
-                    _state.update { it.copy(isPlaying = false) }
-                }
-
-                player.setOnEndOfMedia {
-                    _state.update { it.copy(isPlaying = false, currentPositionMs = it.durationMs) }
-                    stopProgressTracking()
-                    trackEndedCallback?.invoke()
-                }
-
-                player.setOnError {
-                    val err = player.error?.message ?: "Error al reproducir audio"
-                    println("MediaPlayer error: $err")
-                    _state.update { it.copy(isPlaying = false, isBuffering = false, errorMessage = err) }
-                    stopProgressTracking()
-                }
-
-                player.play()
-            } catch (e: Exception) {
-                println("Failed to start media player: ${e.message}")
-                _state.update { it.copy(isBuffering = false, isPlaying = false, errorMessage = e.message) }
-            }
+            generation++
+            streamUrl = url.takeIf { it.startsWith("http") }
+            seekableCopy = null
+            usingCopy = false
+            pendingSeekMs = null
+            copyJob?.cancel()
+            copyJob = null
+            createPlayer(url, startAtMs = null, autoPlay = true)
         }
+    }
+
+    /** Builds the JavaFX player for [url] (FX thread). [startAtMs] is applied once the media is ready. */
+    private fun createPlayer(url: String, startAtMs: Long?, autoPlay: Boolean) {
+        try {
+            disposePlayer()
+
+            val media = Media(url)
+            val player = MediaPlayer(media)
+            mediaPlayer = player
+
+            // Apply initial volume (with normalization) and speed
+            player.volume = effectiveVolume()
+            player.rate = playbackRate
+
+            // Apply hardware/native AudioEqualizer
+            try {
+                val eq = player.audioEqualizer
+                eq.isEnabled = currentEqEnabled
+                for (i in 0 until minOf(eq.bands.size, currentEqGains.size)) {
+                    eq.bands[i].gain = currentEqGains[i].toDouble()
+                }
+            } catch (ignored: Throwable) {}
+
+            player.setOnReady {
+                val actualDuration = media.duration.toMillis().toLong().coerceAtLeast(_state.value.durationMs)
+                _state.update { it.copy(durationMs = actualDuration, isBuffering = false, isPlaying = autoPlay) }
+                player.rate = playbackRate
+                if (startAtMs != null) player.seek(Duration.millis(startAtMs.toDouble()))
+                if (autoPlay) player.play()
+                startProgressTracking()
+            }
+
+            player.setOnPlaying {
+                _state.update { it.copy(isPlaying = true, isBuffering = false) }
+            }
+
+            player.setOnPaused {
+                _state.update { it.copy(isPlaying = false) }
+            }
+
+            player.setOnEndOfMedia {
+                _state.update { it.copy(isPlaying = false, currentPositionMs = it.durationMs) }
+                stopProgressTracking()
+                trackEndedCallback?.invoke()
+            }
+
+            player.setOnError {
+                val err = player.error?.message ?: "Error al reproducir audio"
+                println("MediaPlayer error: $err")
+                _state.update { it.copy(isPlaying = false, isBuffering = false, errorMessage = err) }
+                stopProgressTracking()
+            }
+
+            if (autoPlay) player.play()
+        } catch (e: Exception) {
+            println("Failed to start media player: ${e.message}")
+            _state.update { it.copy(isBuffering = false, isPlaying = false, errorMessage = e.message) }
+        }
+    }
+
+    /** Stops the current player without letting its last events touch the new one's state. */
+    private fun disposePlayer() {
+        mediaPlayer?.let { old ->
+            old.onReady = null
+            old.onPlaying = null
+            old.onPaused = null
+            old.onEndOfMedia = null
+            old.onError = null
+            old.stop()
+            old.dispose()
+        }
+        mediaPlayer = null
     }
 
     private fun startProgressTracking() {
@@ -199,9 +233,49 @@ class JavaFxPlayerEngine : AudioPlayerEngine {
 
     override fun seekTo(positionMs: Long) {
         Platform.runLater {
-            mediaPlayer?.seek(Duration.millis(positionMs.toDouble()))
             _state.update { it.copy(currentPositionMs = positionMs) }
+            val url = streamUrl
+            when {
+                // Local files (downloads, music on this PC) and the local copy seek natively.
+                url == null || usingCopy -> mediaPlayer?.seek(Duration.millis(positionMs.toDouble()))
+                seekableCopy != null -> switchToCopy(positionMs)
+                else -> {
+                    // YouTube streams are fragmented MP4: JavaFX cannot seek in them over HTTP.
+                    // Keep playing, fetch a local copy (~1 s) and jump there once it is ready.
+                    pendingSeekMs = positionMs
+                    if (copyJob == null) startCopy(url)
+                }
+            }
         }
+    }
+
+    private fun startCopy(url: String) {
+        val gen = generation
+        copyJob = scope.launch(Dispatchers.IO) {
+            val file = runCatching { StreamCopy.download(url, gen) }
+                .onFailure { println("Stream copy failed: ${it.message}") }
+                .getOrNull()
+            Platform.runLater {
+                if (gen != generation) return@runLater
+                copyJob = null
+                if (file == null) {
+                    pendingSeekMs = null
+                    return@runLater
+                }
+                seekableCopy = file
+                pendingSeekMs?.let { switchToCopy(it) }
+                pendingSeekMs = null
+            }
+        }
+    }
+
+    /** Continues the song from the local copy at [positionMs] (FX thread). */
+    private fun switchToCopy(positionMs: Long) {
+        val file = seekableCopy ?: return
+        val keepPlaying = _state.value.isPlaying || mediaPlayer?.status == MediaPlayer.Status.PLAYING
+        usingCopy = true
+        stopProgressTracking()
+        createPlayer(file.toURI().toString(), startAtMs = positionMs, autoPlay = keepPlaying)
     }
 
     override fun setVolume(volume: Float) {
@@ -257,9 +331,32 @@ class JavaFxPlayerEngine : AudioPlayerEngine {
         stopProgressTracking()
         scope.cancel()
         Platform.runLater {
-            mediaPlayer?.stop()
-            mediaPlayer?.dispose()
-            mediaPlayer = null
+            disposePlayer()
         }
+        StreamCopy.clear()
+    }
+}
+
+/** Local copies of streamed songs, so JavaFX can seek in them (one at a time, in the temp folder). */
+internal object StreamCopy {
+    private val dir = java.io.File(System.getProperty("java.io.tmpdir"), "echomusic-stream")
+
+    fun download(url: String, tag: Int): java.io.File {
+        dir.mkdirs()
+        clear()
+        val target = java.io.File(dir, "song-$tag.m4a")
+        val temp = java.io.File(dir, "song-$tag.part")
+        val connection = java.net.URI(url).toURL().openConnection().apply {
+            connectTimeout = 10_000
+            readTimeout = 20_000
+        }
+        connection.getInputStream().use { input -> temp.outputStream().use { input.copyTo(it, 64 * 1024) } }
+        check(temp.length() > 0) { "empty download" }
+        if (!temp.renameTo(target)) error("could not save ${target.name}")
+        return target
+    }
+
+    fun clear() {
+        dir.listFiles()?.forEach { it.delete() }
     }
 }
