@@ -694,6 +694,27 @@ private fun DropdownRow(
     }
 }
 
+/** Headphone options (inside the system integration card). */
+@Composable
+fun HeadphoneSettingsRows(appModel: DesktopAppModel) {
+    val prefs by appModel.prefs.collectAsState()
+    ToggleRow(
+        title = "Pausar al desconectar los audífonos",
+        description = "Si se apagan o desconectan tus audífonos Bluetooth o con cable, la música se pausa en vez de salir por las bocinas.",
+        checked = prefs.pauseOnHeadphonesDisconnect,
+        onChange = { v -> appModel.updatePreferences { it.copy(pauseOnHeadphonesDisconnect = v) } }
+    )
+    if (prefs.pauseOnHeadphonesDisconnect) {
+        Spacer(Modifier.height(10.dp))
+        ToggleRow(
+            title = "Seguir al reconectarlos",
+            description = "Cuando esos mismos audífonos vuelven (en menos de 30 minutos), la música continúa sola.",
+            checked = prefs.resumeOnHeadphonesReconnect,
+            onChange = { v -> appModel.updatePreferences { it.copy(resumeOnHeadphonesReconnect = v) } }
+        )
+    }
+}
+
 /** Dynamic island options (inside the system integration card). */
 @Composable
 fun IslandSettingsRows(appModel: DesktopAppModel) {

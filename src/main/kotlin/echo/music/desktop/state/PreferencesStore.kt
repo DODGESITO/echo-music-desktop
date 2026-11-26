@@ -85,6 +85,11 @@ data class DesktopPreferences(
     val islandHideFullscreen: Boolean = true,
     /** Show the clock pill even when nothing is playing. */
     val islandShowIdle: Boolean = true,
+    // --- Audífonos ---
+    /** Pause when Bluetooth or wired headphones disconnect (so music does not jump to the speakers). */
+    val pauseOnHeadphonesDisconnect: Boolean = true,
+    /** Continue when those same headphones come back. */
+    val resumeOnHeadphonesReconnect: Boolean = true,
     // --- Actualizaciones ---
     val checkUpdates: Boolean = true,
     /** GitHub repository ("owner/name") whose releases are checked. */

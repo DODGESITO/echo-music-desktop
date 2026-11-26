@@ -1700,6 +1700,8 @@ class DesktopAppModel(
     }
 
     fun togglePlayPause() {
+        // The user decided: a later reconnection of the headphones must not resume on its own.
+        pausedForOutput = null
         // After a restart the restored song is shown but not loaded yet: start it at the saved position.
         val restored = _currentSong.value
         if (restored != null && playbackState.value.videoId != restored.id && playRequestId == 0L) {
@@ -2518,6 +2520,50 @@ class DesktopAppModel(
     }
 
     // Runs after every property above is initialized (init blocks run in declaration order).
+    // --- Audífonos (Bluetooth o con cable) ---
+    /** Output whose disconnection paused the music, and when. */
+    private var pausedForOutput: String? = null
+    private var pausedForOutputAt = 0L
+
+    private fun startHeadphoneWatch() {
+        if (!com.sun.jna.Platform.isWindows()) return
+        val wake = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED)
+        scope.launch(Dispatchers.IO) {
+            echo.music.desktop.system.AudioDeviceNotifications.register { wake.trySend(Unit) }
+            val tracker = echo.music.desktop.system.OutputChangeTracker { echo.music.desktop.system.AudioDevices.stateOf(it) }
+            while (true) {
+                val current = echo.music.desktop.system.AudioDevices.defaultOutput()
+                val event = tracker.update(current)
+                if (event != null) withContext(Dispatchers.Main) { onOutputEvent(event, current) }
+                // Instant on Windows' notification, otherwise a check every few seconds.
+                kotlinx.coroutines.withTimeoutOrNull(3000) { wake.receive() }
+                delay(150) // let Windows finish switching the default output
+            }
+        }
+    }
+
+    private fun onOutputEvent(event: echo.music.desktop.system.OutputEvent, current: echo.music.desktop.system.AudioOutput?) {
+        val prefs = _prefs.value
+        if (event is echo.music.desktop.system.OutputEvent.PersonalDisconnected &&
+            prefs.pauseOnHeadphonesDisconnect && playbackState.value.isPlaying
+        ) {
+            playerEngine.pause()
+            pausedForOutput = event.device.id
+            pausedForOutputAt = System.currentTimeMillis()
+            _statusMessage.value = "Se desconectaron los audífonos (${event.device.name}): música en pausa"
+            return
+        }
+        val waitingFor = pausedForOutput ?: return
+        if (current?.id == waitingFor && current.isActive) {
+            pausedForOutput = null
+            val recent = System.currentTimeMillis() - pausedForOutputAt < 30 * 60 * 1000L
+            if (prefs.resumeOnHeadphonesReconnect && recent && !playbackState.value.isPlaying) {
+                playerEngine.resume()
+                _statusMessage.value = "Audífonos conectados (${current.name}): continuando"
+            }
+        }
+    }
+
     // --- Actualizaciones ---
     private val _update = MutableStateFlow(UpdateState())
     val update: StateFlow<UpdateState> = _update.asStateFlow()
@@ -2583,6 +2629,7 @@ class DesktopAppModel(
         }
         if (_prefs.value.localMusicFolders.isNotEmpty()) rescanLocalMusic()
         startScrobbleTracking()
+        startHeadphoneWatch()
 
         // SponsorBlock: jump over marked parts (each one once per playback).
         scope.launch {

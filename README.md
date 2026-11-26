@@ -65,6 +65,7 @@ el aviso no encuentra nada. Se puede publicar las versiones en otro repositorio 
 - Panel multimedia de Windows: título, artista, portada, ⏮ ⏯ ⏭ y barra para adelantar (también con la app en la bandeja)
 - Isla dinámica arriba de la pantalla: hora, reproductor, cola, controles y letra sincronizada al pasar el mouse
 - Botones ⏮ ⏯ ⏭ en la vista previa de la barra de tareas
+- Pausa al desconectar audífonos (Bluetooth o con cable) y sigue al reconectarlos
 - La cookie de YouTube y las claves se guardan cifradas con Windows (DPAPI)
 
 Los datos del usuario se guardan en `%USERPROFILE%\.echomusic`.
@@ -94,7 +95,6 @@ El script copia los módulos y archivos que usa la PC y vuelve a aplicar los arr
 
 ## Pendiente
 
-- Audífonos Bluetooth: pausar al desconectarse y seguir al reconectarse
 - Del celular: modo video, recomendaciones inteligentes (Music Flow, mezclas, playlists con IA),
   Jellyfin/Navidrome, biblioteca y Canvas de Spotify, tipografías
 
