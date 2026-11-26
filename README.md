@@ -1,0 +1,78 @@
+# Echo Music para PC
+
+Versión de escritorio (Windows) de [Echo Music](https://github.com/EchoMusicApp/Echo-Music), hecha con
+Compose Desktop. Reutiliza el código Kotlin de Echo Music que no depende de Android
+(cliente de YouTube Music, proveedores de letras, Shazam y Canvas).
+
+## Requisitos
+
+- Windows 10/11
+- JDK 21 (por ejemplo Oracle JDK o Microsoft Build of OpenJDK)
+
+## Ejecutar
+
+```powershell
+.\run-desktop.bat
+```
+
+o directamente:
+
+```powershell
+.\gradlew.bat run
+```
+
+Tests:
+
+```powershell
+.\gradlew.bat test
+```
+
+Instalador (`.msi` / `.exe`):
+
+```powershell
+.\gradlew.bat packageDistributionForCurrentOS
+```
+
+## Funciones
+
+- Reproducción con cola, aleatorio, repetir, crossfade, ecualizador, velocidad, normalización de volumen,
+  calidad de audio, saltar canciones que fallan, SponsorBlock y teclas multimedia globales
+- Continúa donde lo dejaste al reiniciar
+- Inicio de YouTube Music, búsqueda completa con sugerencias, Charts, estados de ánimo y géneros,
+  novedades, podcasts y comentarios
+- Cuenta de YouTube Music: playlists, "Me gusta", álbumes y artistas guardados
+- Música local (MP3, M4A, WAV, AIFF), descargas y playlists propias
+- Letras de 7 fuentes con sincronización palabra por palabra, romanización y traducción con IA
+  (OpenRouter, DeepL o Mistral con tu propia clave)
+- Canvas (portadas animadas), Echo Find (reconocer canciones), Escuchar Juntos, Discord
+- Last.fm y ListenBrainz, bloqueo de artistas y "No me gusta", copia de seguridad, temas de color
+- La cookie de YouTube y las claves se guardan cifradas con Windows (DPAPI)
+
+Los datos del usuario se guardan en `%USERPROFILE%\.echomusic`.
+
+## Estructura
+
+| Carpeta | Contenido |
+|---|---|
+| `src/main/kotlin` | La aplicación de escritorio |
+| `src/shims/kotlin` | Reemplazos mínimos de `android.content.Context`, `android.util.Base64` y Timber para que el código compartido compile sin Android |
+| `src/test/kotlin` | Tests (los que usan red solo corren con `-DlyricsProbe=true`) |
+| `shared/` | Código tomado **sin cambios** de Echo Music (salvo los arreglos de `scripts/innertube-desktop.patch`) |
+| `shared/echo-app` | Archivos sueltos de la app de Echo Music: traducción, Last.fm, ListenBrainz, firma de Shazam |
+| `shared/echo-app-romanization` | `LyricsUtils.kt` de Echo Music; al compilar se usa solo la parte de romanización |
+
+## Actualizar el código compartido
+
+Cuando salga una versión nueva de Echo Music:
+
+```powershell
+git clone https://github.com/EchoMusicApp/Echo-Music.git C:\temp\Echo-Music
+.\scripts\update-shared.ps1 -EchoMusic C:\temp\Echo-Music
+.\gradlew.bat test
+```
+
+El script copia los módulos y archivos que usa la PC y vuelve a aplicar los arreglos de `innertube`.
+
+## Licencia
+
+GPL-3.0, igual que Echo Music (ver `LICENSE`). Basado en el trabajo de los autores de Echo Music.
