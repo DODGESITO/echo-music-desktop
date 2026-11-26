@@ -64,6 +64,7 @@ el aviso no encuentra nada. Se puede publicar las versiones en otro repositorio 
 - Mini reproductor siempre visible (Ctrl + M), iniciar con Windows y aviso de versiones nuevas
 - Panel multimedia de Windows: título, artista, portada, ⏮ ⏯ ⏭ y barra para adelantar (también con la app en la bandeja)
 - Isla dinámica arriba de la pantalla: hora, reproductor, cola, controles y letra sincronizada al pasar el mouse
+- Botones ⏮ ⏯ ⏭ en la vista previa de la barra de tareas
 - La cookie de YouTube y las claves se guardan cifradas con Windows (DPAPI)
 
 Los datos del usuario se guardan en `%USERPROFILE%\.echomusic`.

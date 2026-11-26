@@ -289,6 +289,27 @@ fun main(args: Array<String>) = application {
     ) {
         // Windows media panel (title, artist, cover, ⏮ ⏯ ⏭ and progress next to the volume indicator).
         val mainWindow = window
+        // Same actions for the Windows media panel and the taskbar preview buttons.
+        val onMediaButton: (echo.music.desktop.system.MediaControlButton) -> Unit = { button ->
+            javax.swing.SwingUtilities.invokeLater {
+                val playing = appModel.playbackState.value.isPlaying
+                when (button) {
+                    echo.music.desktop.system.MediaControlButton.PLAY -> if (!playing) appModel.togglePlayPause()
+                    echo.music.desktop.system.MediaControlButton.PAUSE -> if (playing) appModel.togglePlayPause()
+                    echo.music.desktop.system.MediaControlButton.STOP -> appModel.onMediaKey(MediaKey.STOP)
+                    echo.music.desktop.system.MediaControlButton.NEXT -> appModel.onMediaKey(MediaKey.NEXT)
+                    echo.music.desktop.system.MediaControlButton.PREVIOUS -> appModel.onMediaKey(MediaKey.PREVIOUS)
+                }
+            }
+        }
+        // ⏮ ⏯ ⏭ under the taskbar preview: added once the window has its taskbar button.
+        LaunchedEffect(isWindowVisible) {
+            if (!isWindowVisible) return@LaunchedEffect
+            while (mainWindow.windowHandle == 0L) kotlinx.coroutines.delay(100)
+            kotlinx.coroutines.delay(800)
+            echo.music.desktop.system.TaskbarButtons.install(mainWindow.windowHandle, onMediaButton)
+            appModel.playbackState.collect { echo.music.desktop.system.TaskbarButtons.setPlaying(it.isPlaying) }
+        }
         LaunchedEffect(Unit) {
             // Started in the tray the window was never shown: give it its native handle anyway.
             if (!mainWindow.isDisplayable) mainWindow.addNotify()
@@ -296,18 +317,7 @@ fun main(args: Array<String>) = application {
             val started = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 echo.music.desktop.system.WindowsMediaControls.start(
                     hwnd,
-                    onButton = { button ->
-                        javax.swing.SwingUtilities.invokeLater {
-                            val playing = appModel.playbackState.value.isPlaying
-                            when (button) {
-                                echo.music.desktop.system.MediaControlButton.PLAY -> if (!playing) appModel.togglePlayPause()
-                                echo.music.desktop.system.MediaControlButton.PAUSE -> if (playing) appModel.togglePlayPause()
-                                echo.music.desktop.system.MediaControlButton.STOP -> appModel.onMediaKey(MediaKey.STOP)
-                                echo.music.desktop.system.MediaControlButton.NEXT -> appModel.onMediaKey(MediaKey.NEXT)
-                                echo.music.desktop.system.MediaControlButton.PREVIOUS -> appModel.onMediaKey(MediaKey.PREVIOUS)
-                            }
-                        }
-                    },
+                    onButton = onMediaButton,
                     onSeek = { ms -> javax.swing.SwingUtilities.invokeLater { appModel.seekToPositionMs(ms) } }
                 )
             }
