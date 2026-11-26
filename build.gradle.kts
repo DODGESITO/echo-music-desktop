@@ -43,8 +43,19 @@ val sharedRomanization = tasks.register("syncSharedRomanization") {
     }
 }
 
+/** App version: used by the installers and shown/compared by the update checker. */
+val appVersion = "1.1.0"
+
+val versionResource = tasks.register("generateVersionResource") {
+    val target = layout.buildDirectory.file("generated/versionResource/echo-version.txt")
+    inputs.property("version", appVersion)
+    outputs.file(target)
+    doLast { target.get().asFile.apply { parentFile.mkdirs() }.writeText(appVersion) }
+}
+
 sourceSets {
     main {
+        resources.srcDir(versionResource.map { layout.buildDirectory.dir("generated/versionResource").get() })
         kotlin {
             srcDir(sharedRomanization.map { layout.buildDirectory.dir("generated/sharedRomanization").get() })
             srcDirs(
@@ -173,7 +184,14 @@ compose.desktop {
                 org.jetbrains.compose.desktop.application.dsl.TargetFormat.Exe
             )
             packageName = "EchoMusic"
-            packageVersion = "1.0.1"
+            // From suggestRuntimeModules, plus what is only reached by reflection/locale lookups:
+            // TLS elliptic curves, Spanish dates, extra charsets, DNS (okhttp), SQL types (jaudiotagger).
+            modules(
+                "java.instrument", "java.management", "java.net.http", "jdk.dynalink", "jdk.httpserver",
+                "jdk.jfr", "jdk.unsupported", "jdk.crypto.ec", "jdk.localedata", "jdk.charsets",
+                "java.naming", "java.sql", "java.logging", "jdk.zipfs", "java.prefs"
+            )
+            packageVersion = appVersion
             description = "Echo Music Desktop Player - Nothing OS 5.0"
             vendor = "Echo Music"
             copyright = "© 2026 Echo Music"

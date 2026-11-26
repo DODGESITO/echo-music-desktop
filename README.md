@@ -27,11 +27,25 @@ Tests:
 .\gradlew.bat test
 ```
 
-Instalador (`.msi` / `.exe`):
+Instalador:
 
 ```powershell
-.\gradlew.bat packageDistributionForCurrentOS
+.\build-installer.bat
 ```
+
+Deja `EchoMusic-<versión>.exe` en `build\compose\binaries\main\exe`. La primera vez Gradle descarga WiX
+solo. La versión se cambia en `appVersion` de `build.gradle.kts`.
+
+## Publicar una versión
+
+El aviso de actualizaciones busca la última *release* de GitHub del repositorio puesto en
+Ajustes → Actualizaciones (por defecto `DODGESITO/echo-music-desktop`). Para avisar de una versión nueva:
+
+1. Sube `appVersion` en `build.gradle.kts` y genera el instalador.
+2. Crea una *release* con la etiqueta `v<versión>` (por ejemplo `v1.2.0`) y adjunta el `.exe`.
+
+GitHub solo responde sin iniciar sesión si el repositorio es público, así que con el repositorio privado
+el aviso no encuentra nada. Se puede publicar las versiones en otro repositorio público y ponerlo en Ajustes.
 
 ## Funciones
 
@@ -46,6 +60,8 @@ Instalador (`.msi` / `.exe`):
   (OpenRouter, DeepL o Mistral con tu propia clave)
 - Canvas (portadas animadas), Echo Find (reconocer canciones), Escuchar Juntos, Discord
 - Last.fm y ListenBrainz, bloqueo de artistas y "No me gusta", copia de seguridad, temas de color
+- Historial privado (pausar y borrar), historial de Echo Find, editar playlists y respuestas a comentarios
+- Mini reproductor siempre visible (Ctrl + M), iniciar con Windows y aviso de versiones nuevas
 - La cookie de YouTube y las claves se guardan cifradas con Windows (DPAPI)
 
 Los datos del usuario se guardan en `%USERPROFILE%\.echomusic`.
@@ -78,7 +94,6 @@ El script copia los módulos y archivos que usa la PC y vuelve a aplicar los arr
 - Aparecer en el panel multimedia de Windows (título, artista, portada y botones ⏮ ⏯ ⏭)
 - Isla dinámica flotante en la parte superior de la pantalla, sobre cualquier programa
 - Audífonos Bluetooth: pausar al desconectarse y seguir al reconectarse
-- Mini reproductor flotante, instalador probado, iniciar con Windows y aviso de actualizaciones
 - Del celular: modo video, recomendaciones inteligentes (Music Flow, mezclas, playlists con IA),
   Jellyfin/Navidrome, biblioteca y Canvas de Spotify, tipografías
 

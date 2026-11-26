@@ -72,7 +72,20 @@ data class DesktopPreferences(
     val lastFmUsername: String = "",
     val listenTogetherUsername: String = "",
     val listenTogetherServerUrl: String = "wss://metroserverx.meowery.eu/ws",
-    val listenTogetherAutoApprove: Boolean = true
+    val listenTogetherAutoApprove: Boolean = true,
+    // --- Ventana y sistema ---
+    /** When Echo Music starts with Windows, open it in the tray instead of showing the window. */
+    val startMinimized: Boolean = true,
+    /** Last position of the mini player (dp, screen coordinates). */
+    val miniPlayerX: Int? = null,
+    val miniPlayerY: Int? = null,
+    // --- Actualizaciones ---
+    val checkUpdates: Boolean = true,
+    /** GitHub repository ("owner/name") whose releases are checked. */
+    val updateRepo: String = echo.music.desktop.system.UpdateChecker.DEFAULT_REPO,
+    val lastUpdateCheck: Long = 0L,
+    /** Version the user chose to skip; it is not announced again. */
+    val skippedUpdateVersion: String = ""
 )
 
 object PreferencesStore {

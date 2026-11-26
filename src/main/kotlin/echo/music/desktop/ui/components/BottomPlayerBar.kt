@@ -53,6 +53,7 @@ fun BottomPlayerBar(
     onStartRadio: (() -> Unit)? = null,
     onAddToPlaylist: (() -> Unit)? = null,
     onArtistClick: ((String) -> Unit)? = null,
+    onOpenMiniPlayer: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -405,6 +406,17 @@ fun BottomPlayerBar(
                 )
 
                 Spacer(modifier = Modifier.width(8.dp))
+
+                if (onOpenMiniPlayer != null) {
+                    IconButton(onClick = onOpenMiniPlayer, modifier = Modifier.size(34.dp)) {
+                        Icon(
+                            Icons.Default.PictureInPictureAlt,
+                            contentDescription = "Mini reproductor (Ctrl + M)",
+                            tint = NothingColors.TextSecondary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
 
                 // Expand Full Player
                 IconButton(onClick = onExpandPlayer, modifier = Modifier.size(36.dp)) {

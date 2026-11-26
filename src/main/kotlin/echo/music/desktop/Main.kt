@@ -52,7 +52,13 @@ fun main(args: Array<String>) = application {
         height = prefs.windowHeight.dp
     )
     val appModel = remember { DesktopAppModel() }
-    var isWindowVisible by remember { mutableStateOf(true) }
+    // Started with Windows in the tray: the window stays hidden until opened from the tray icon.
+    var isWindowVisible by remember { mutableStateOf(echo.music.desktop.system.WindowsStartup.MINIMIZED_ARG !in args) }
+    var isMiniPlayerOpen by remember { mutableStateOf(false) }
+    fun openMiniPlayer() {
+        isMiniPlayerOpen = true
+        isWindowVisible = false
+    }
 
     fun saveWindowState() {
         val pos = windowState.position
@@ -115,6 +121,10 @@ fun main(args: Array<String>) = application {
             Item("Pista anterior", onClick = { appModel.playPrevious() })
             Separator()
             Item(
+                if (isMiniPlayerOpen) "Cerrar mini reproductor" else "Mini reproductor",
+                onClick = { if (isMiniPlayerOpen) isMiniPlayerOpen = false else openMiniPlayer() }
+            )
+            Item(
                 if (isWindowVisible) "Ocultar en segundo plano" else "Mostrar ventana",
                 onClick = { isWindowVisible = !isWindowVisible }
             )
@@ -124,6 +134,17 @@ fun main(args: Array<String>) = application {
             })
         }
     )
+
+    if (isMiniPlayerOpen) {
+        echo.music.desktop.ui.components.MiniPlayerWindow(
+            appModel = appModel,
+            onOpenMain = {
+                isMiniPlayerOpen = false
+                isWindowVisible = true
+            },
+            onClose = { isMiniPlayerOpen = false }
+        )
+    }
 
     Window(
         onCloseRequest = {
@@ -149,6 +170,11 @@ fun main(args: Array<String>) = application {
                     keyEvent.isCtrlPressed && keyEvent.key == Key.W -> {
                         saveWindowState()
                         isWindowVisible = false
+                        true
+                    }
+                    keyEvent.isCtrlPressed && keyEvent.key == Key.M -> {
+                        saveWindowState()
+                        openMiniPlayer()
                         true
                     }
                     keyEvent.isCtrlPressed && keyEvent.key == Key.Q -> {
@@ -362,6 +388,20 @@ fun main(args: Array<String>) = application {
                         }
                     }
 
+                    val updateBanner by appModel.updateBanner.collectAsState()
+                    updateBanner?.let { info ->
+                        echo.music.desktop.ui.components.UpdateBanner(
+                            info = info,
+                            onDownload = {
+                                appModel.openUpdatePage()
+                                appModel.dismissUpdate(skip = false)
+                            },
+                            onLater = { appModel.dismissUpdate(skip = false) },
+                            onSkip = { appModel.dismissUpdate(skip = true) },
+                            modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)
+                        )
+                    }
+
                     // Persistent Bottom Player Bar
                     BottomPlayerBar(
                         currentSong = currentSong,
@@ -383,6 +423,10 @@ fun main(args: Array<String>) = application {
                         onStartRadio = { currentSong?.let { appModel.startRadio(it) } },
                         onAddToPlaylist = { currentSong?.let { appModel.openAddToPlaylist(listOf(it)) } },
                         onArtistClick = { appModel.openArtist(it) },
+                        onOpenMiniPlayer = {
+                            saveWindowState()
+                            openMiniPlayer()
+                        },
                         modifier = Modifier.align(Alignment.BottomCenter)
                     )
 

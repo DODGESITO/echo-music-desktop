@@ -2518,9 +2518,69 @@ class DesktopAppModel(
     }
 
     // Runs after every property above is initialized (init blocks run in declaration order).
+    // --- Actualizaciones ---
+    private val _update = MutableStateFlow(UpdateState())
+    val update: StateFlow<UpdateState> = _update.asStateFlow()
+    private val _updateBanner = MutableStateFlow<echo.music.desktop.system.UpdateInfo?>(null)
+    /** New version announced in the main window (until dismissed). */
+    val updateBanner: StateFlow<echo.music.desktop.system.UpdateInfo?> = _updateBanner.asStateFlow()
+
+    /** Checks GitHub for a newer release. [manual] also announces versions the user skipped. */
+    fun checkForUpdates(manual: Boolean = true) {
+        if (_update.value.checking) return
+        _update.value = _update.value.copy(checking = true, message = null)
+        scope.launch {
+            val repo = _prefs.value.updateRepo.ifBlank { echo.music.desktop.system.UpdateChecker.DEFAULT_REPO }
+            val result = withContext(Dispatchers.IO) { echo.music.desktop.system.UpdateChecker.check(repo) }
+            updatePreferences { it.copy(lastUpdateCheck = System.currentTimeMillis()) }
+            _update.value = when (result) {
+                is echo.music.desktop.system.UpdateResult.Available ->
+                    UpdateState(available = result.info, message = "Echo Music ${result.info.version} está disponible.")
+                echo.music.desktop.system.UpdateResult.UpToDate ->
+                    UpdateState(message = "Tienes la última versión (${echo.music.desktop.system.AppInfo.version}).")
+                is echo.music.desktop.system.UpdateResult.Failed -> UpdateState(message = result.message)
+            }
+            if (result is echo.music.desktop.system.UpdateResult.Available &&
+                (manual || result.info.version != _prefs.value.skippedUpdateVersion)
+            ) _updateBanner.value = result.info
+        }
+    }
+
+    fun openUpdatePage() {
+        val url = (_updateBanner.value ?: _update.value.available)?.url ?: return
+        runCatching { java.awt.Desktop.getDesktop().browse(java.net.URI(url)) }
+    }
+
+    /** Hides the announcement; with [skip] that version is not announced again automatically. */
+    fun dismissUpdate(skip: Boolean) {
+        val info = _updateBanner.value
+        if (skip && info != null) updatePreferences { it.copy(skippedUpdateVersion = info.version) }
+        _updateBanner.value = null
+    }
+
+    // --- Iniciar con Windows ---
+    private val _startWithWindows = MutableStateFlow(echo.music.desktop.system.WindowsStartup.isEnabled())
+    val startWithWindows: StateFlow<Boolean> = _startWithWindows.asStateFlow()
+
+    fun setStartWithWindows(enabled: Boolean) {
+        if (!echo.music.desktop.system.WindowsStartup.setEnabled(enabled, _prefs.value.startMinimized)) {
+            _statusMessage.value = "No se pudo cambiar el inicio con Windows"
+        }
+        _startWithWindows.value = echo.music.desktop.system.WindowsStartup.isEnabled()
+    }
+
+    fun setStartMinimized(minimized: Boolean) {
+        updatePreferences { it.copy(startMinimized = minimized) }
+        echo.music.desktop.system.WindowsStartup.refresh(minimized)
+    }
+
     init {
         applyContentLocale()
         playerEngine.setPlaybackRate(_prefs.value.playbackSpeed)
+        echo.music.desktop.system.WindowsStartup.refresh(_prefs.value.startMinimized)
+        if (_prefs.value.checkUpdates && System.currentTimeMillis() - _prefs.value.lastUpdateCheck > 24 * 60 * 60 * 1000L) {
+            checkForUpdates(manual = false)
+        }
         if (_prefs.value.localMusicFolders.isNotEmpty()) rescanLocalMusic()
         startScrobbleTracking()
 
@@ -2634,3 +2694,10 @@ sealed class EchoFindState {
     data object NoMatch : EchoFindState()
     data class Failed(val message: String) : EchoFindState()
 }
+
+data class UpdateState(
+    val checking: Boolean = false,
+    val available: echo.music.desktop.system.UpdateInfo? = null,
+    /** Result of the last check, shown in Settings. */
+    val message: String? = null
+)

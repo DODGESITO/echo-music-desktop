@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -690,5 +691,96 @@ private fun DropdownRow(
                 }
             }
         }
+    }
+}
+
+/** "Iniciar con Windows" and "Abrir en la bandeja" rows (inside the system integration card). */
+@Composable
+fun StartupSettingsRows(appModel: DesktopAppModel) {
+    val prefs by appModel.prefs.collectAsState()
+    val startWithWindows by appModel.startWithWindows.collectAsState()
+    val supported = echo.music.desktop.system.WindowsStartup.isSupported
+    SettingRowFrame {
+        SettingTexts(
+            "Iniciar con Windows",
+            if (supported) "Echo Music se abre solo al encender la PC."
+            else "Disponible en la versión instalada (no al abrirla con run-desktop.bat)."
+        )
+        Switch(
+            checked = startWithWindows,
+            enabled = supported || startWithWindows,
+            onCheckedChange = { appModel.setStartWithWindows(it) },
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color.White,
+                checkedTrackColor = NothingColors.AccentRed,
+                uncheckedThumbColor = NothingColors.TextMuted,
+                uncheckedTrackColor = NothingColors.Surface
+            )
+        )
+    }
+    if (startWithWindows) {
+        Spacer(Modifier.height(10.dp))
+        ToggleRow(
+            title = "Abrir en la bandeja",
+            description = "Al iniciar con Windows queda junto al reloj, sin mostrar la ventana.",
+            checked = prefs.startMinimized,
+            onChange = { appModel.setStartMinimized(it) }
+        )
+    }
+}
+
+@Composable
+fun UpdateSettings(appModel: DesktopAppModel) {
+    val prefs by appModel.prefs.collectAsState()
+    val update by appModel.update.collectAsState()
+    var repo by remember { mutableStateOf(prefs.updateRepo) }
+
+    SettingsCard(title = "ACTUALIZACIONES", icon = Icons.Default.SystemUpdate) {
+        SettingRowFrame {
+            SettingTexts(
+                "Versión ${echo.music.desktop.system.AppInfo.version}",
+                update.message ?: "Busca versiones nuevas en las publicaciones (releases) de GitHub."
+            )
+            update.available?.let { info ->
+                TextButton(onClick = { appModel.openUpdatePage() }) {
+                    Text("Descargar ${info.version}", color = NothingColors.AccentRed)
+                }
+            }
+            TextButton(onClick = { appModel.checkForUpdates(manual = true) }, enabled = !update.checking) {
+                if (update.checking) {
+                    CircularProgressIndicator(color = NothingColors.AccentRed, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                } else {
+                    Text("Buscar ahora", color = NothingColors.AccentRed)
+                }
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+        ToggleRow(
+            title = "Buscar al iniciar",
+            description = "Una vez al día, al abrir Echo Music.",
+            checked = prefs.checkUpdates,
+            onChange = { v -> appModel.updatePreferences { it.copy(checkUpdates = v) } }
+        )
+        Spacer(Modifier.height(10.dp))
+        OutlinedTextField(
+            value = repo,
+            onValueChange = { repo = it },
+            label = { Text("Repositorio de GitHub (dueño/nombre)") },
+            singleLine = true,
+            colors = fieldColors(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .onFocusChanged { f ->
+                    appModel.isInputFocused = f.isFocused
+                    if (!f.isFocused && repo.trim() != prefs.updateRepo) {
+                        appModel.updatePreferences { it.copy(updateRepo = repo.trim()) }
+                    }
+                }
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "Solo funciona con un repositorio público, o con versiones publicadas en uno público.",
+            style = MaterialTheme.typography.labelSmall.copy(color = NothingColors.TextMuted)
+        )
     }
 }

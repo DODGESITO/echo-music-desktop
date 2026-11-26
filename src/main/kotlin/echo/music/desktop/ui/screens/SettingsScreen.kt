@@ -947,6 +947,9 @@ fun SettingsScreen(
                 )
             }
 
+            Spacer(modifier = Modifier.height(10.dp))
+            StartupSettingsRows(appModel)
+
             Spacer(modifier = Modifier.height(14.dp))
 
             Text(
@@ -970,6 +973,7 @@ fun SettingsScreen(
                 "L" to "Agregar / Quitar de Favoritos",
                 "S / R" to "Alternar Aleatorio / Repetición",
                 "Ctrl + F" to "Enfocar barra de búsqueda",
+                "Ctrl + M" to "Abrir el mini reproductor",
                 "Esc" to "Cerrar modal / vista expandida"
             )
 
@@ -1008,6 +1012,8 @@ fun SettingsScreen(
             }
         }
 
+        UpdateSettings(appModel)
+
         // Section 5: About
         SettingsCard(
             title = "ACERCA DE ECHO MUSIC DESKTOP",
@@ -1015,7 +1021,7 @@ fun SettingsScreen(
         ) {
             SettingRow(
                 label = "Versión",
-                value = "1.0.1 Desktop (Edición Nothing OS 5.0)"
+                value = "${echo.music.desktop.system.AppInfo.version} Desktop (Edición Nothing OS 5.0)"
             )
             SettingRow(
                 label = "Framework",
