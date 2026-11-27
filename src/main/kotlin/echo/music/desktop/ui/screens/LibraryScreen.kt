@@ -63,12 +63,13 @@ fun LibraryScreen(
     val libraryArtists by appModel.libraryArtists.collectAsState()
     val isAccountLibraryLoading by appModel.isAccountLibraryLoading.collectAsState()
     val localTracks by appModel.localTracks.collectAsState()
+    val spotifyPlaylists by appModel.spotifyPlaylists.collectAsState()
 
     val displayList = when (selectedSubTab) {
         LibrarySubTab.FAVORITES -> favorites
         LibrarySubTab.HISTORY -> history
         LibrarySubTab.DOWNLOADS -> downloadedSongs.map { it.toSongItem() }
-        LibrarySubTab.PLAYLISTS, LibrarySubTab.ALBUMS, LibrarySubTab.ARTISTS, LibrarySubTab.LOCAL -> emptyList()
+        LibrarySubTab.PLAYLISTS, LibrarySubTab.ALBUMS, LibrarySubTab.ARTISTS, LibrarySubTab.LOCAL, LibrarySubTab.SPOTIFY -> emptyList()
     }
 
     Column(
@@ -98,6 +99,7 @@ fun LibraryScreen(
                         LibrarySubTab.ALBUMS -> libraryAlbums.size
                         LibrarySubTab.ARTISTS -> libraryArtists.size
                         LibrarySubTab.LOCAL -> localTracks.size
+                        LibrarySubTab.SPOTIFY -> spotifyPlaylists.size
                     }
                     Box(
                         modifier = Modifier
@@ -121,6 +123,7 @@ fun LibraryScreen(
                                     LibrarySubTab.ALBUMS -> Icons.Default.Album
                                     LibrarySubTab.ARTISTS -> Icons.Default.Person
                                     LibrarySubTab.LOCAL -> Icons.Default.Computer
+                                    LibrarySubTab.SPOTIFY -> Icons.Default.LibraryMusic
                                 },
                                 contentDescription = null,
                                 tint = if (isSelected) NothingColors.AccentRed else NothingColors.TextMuted,
@@ -459,6 +462,10 @@ fun LibraryScreen(
 
             LibrarySubTab.LOCAL -> {
                 LocalMusicContent(appModel = appModel, currentSong = currentSong, playbackState = playbackState)
+            }
+
+            LibrarySubTab.SPOTIFY -> {
+                SpotifyLibraryContent(appModel = appModel, modifier = Modifier.weight(1f))
             }
 
             LibrarySubTab.ALBUMS, LibrarySubTab.ARTISTS -> {

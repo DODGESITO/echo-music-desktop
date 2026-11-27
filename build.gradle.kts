@@ -77,6 +77,8 @@ sourceSets {
                 "shared/shazamkit",
                 "shared/canvas",
                 "shared/applecanvas",
+                // Spotify client (library, Canvas, matching songs on YouTube Music)
+                "shared/spotify",
                 // Single files from the app: translation, Last.fm, ListenBrainz, Shazam signature
                 "shared/echo-app"
             )
@@ -146,6 +148,8 @@ dependencies {
     implementation("net.jthink:jaudiotagger:3.0.1")
 
     // JNA: global media keys (Windows low-level keyboard hook)
+    // @Inject/@Singleton annotations in the shared Spotify client
+    implementation("javax.inject:javax.inject:1")
     implementation("net.java.dev.jna:jna:5.17.0")
     implementation("net.java.dev.jna:jna-platform:5.17.0")
 

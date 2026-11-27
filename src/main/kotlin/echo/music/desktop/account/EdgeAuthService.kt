@@ -12,6 +12,20 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionStage
 import java.util.concurrent.TimeUnit
 
+/** A site whose login cookies are read from a local Edge/Chrome window (Chrome DevTools Protocol). */
+data class CookieLogin(
+    val loginUrl: String,
+    /** Pages of this site we may talk to (the login page we opened). */
+    val isSiteHost: (String) -> Boolean,
+    /** URLs whose cookies are read. */
+    val cookieUrls: List<String>,
+    /** Logged in once any of these cookies exists. */
+    val loggedInCookies: Set<String>,
+    /** Separate browser profile per site. */
+    val profileDir: File,
+    val siteName: String
+)
+
 object EdgeAuthService {
     private var activeProcess: Process? = null
     private var job: Job? = null
@@ -28,8 +42,29 @@ object EdgeAuthService {
         return candidates.firstOrNull { File(it).exists() }
     }
 
+    /** YouTube Music login: returns the "Cookie" header of music.youtube.com. */
     fun launch(
         onSuccess: (String) -> Unit,
+        onError: (String) -> Unit,
+        onStatus: (String) -> Unit
+    ) = launchCookieLogin(
+        CookieLogin(
+            loginUrl = "https://accounts.google.com/ServiceLogin?continue=https%3A%2F%2Fmusic.youtube.com",
+            isSiteHost = ::isGoogleHost,
+            cookieUrls = listOf("https://music.youtube.com", "https://youtube.com"),
+            loggedInCookies = setOf("LOGIN_INFO", "SAPISID", "SID"),
+            profileDir = echo.music.desktop.state.AccountStore.browserAuthProfileDir,
+            siteName = "Google"
+        ),
+        onSuccess = { cookies -> onSuccess(cookies.entries.joinToString("; ") { "${it.key}=${it.value}" }) },
+        onError = onError,
+        onStatus = onStatus
+    )
+
+    /** Opens [login] in its own browser window and returns its cookies once the user signed in. */
+    fun launchCookieLogin(
+        login: CookieLogin,
+        onSuccess: (Map<String, String>) -> Unit,
         onError: (String) -> Unit,
         onStatus: (String) -> Unit
     ) {
@@ -40,7 +75,7 @@ object EdgeAuthService {
             return
         }
 
-        val profileDir = echo.music.desktop.state.AccountStore.browserAuthProfileDir
+        val profileDir = login.profileDir
         if (!profileDir.exists()) profileDir.mkdirs()
         // Port 0 = the browser picks a free port and writes it to this file (no fixed, guessable
         // port and no clash with other tools such as the Node.js debugger on 9229).
@@ -55,7 +90,7 @@ object EdgeAuthService {
                 "--user-data-dir=${profileDir.absolutePath}",
                 "--no-first-run",
                 "--no-default-browser-check",
-                "--app=https://accounts.google.com/ServiceLogin?continue=https%3A%2F%2Fmusic.youtube.com"
+                "--app=${login.loginUrl}"
             ).start()
         } catch (e: Exception) {
             onError("No se pudo iniciar el navegador: ${e.message}")
@@ -65,10 +100,10 @@ object EdgeAuthService {
 
         job = CoroutineScope(Dispatchers.IO).launch {
             withContext(Dispatchers.Main) {
-                onStatus("Ventana de Google abierta. Inicia sesión en la ventana de Edge...")
+                onStatus("Ventana de ${login.siteName} abierta. Inicia sesión en la ventana de Edge...")
             }
             val httpClient = HttpClient.newHttpClient()
-            var detectedCookie: String? = null
+            var detectedCookie: Map<String, String>? = null
             var attempts = 0
             val maxAttempts = 180 // 3 minutes timeout
 
@@ -90,25 +125,21 @@ object EdgeAuthService {
                     val res = httpClient.send(req, HttpResponse.BodyHandlers.ofString())
                     if (res.statusCode() == 200) {
                         val pagesJson = Json.parseToJsonElement(res.body()).jsonArray
-                        // Only talk to the Google/YouTube login page we opened.
+                        // Only talk to the login page we opened.
                         val page = pagesJson.firstOrNull { elem ->
                             val type = elem.jsonObject["type"]?.jsonPrimitive?.content
                             val host = runCatching {
                                 URI(elem.jsonObject["url"]?.jsonPrimitive?.content.orEmpty()).host.orEmpty()
                             }.getOrDefault("")
-                            type == "page" && isGoogleHost(host)
+                            type == "page" && login.isSiteHost(host)
                         }
 
                         val wsUrl = page?.jsonObject?.get("webSocketDebuggerUrl")?.jsonPrimitive?.content
                         // The DevTools socket must be the local browser we started.
                         if (!wsUrl.isNullOrBlank() && wsUrl.startsWith("ws://127.0.0.1:$debugPort/")) {
-                            val cookies = queryCookiesViaWebSocket(httpClient, wsUrl)
-                            if (cookies.isNotEmpty()) {
-                                val hasLogin = cookies.any { it.first == "LOGIN_INFO" || it.first == "SAPISID" || it.first == "SID" }
-                                if (hasLogin) {
-                                    val cookieStr = cookies.joinToString("; ") { "${it.first}=${it.second}" }
-                                    detectedCookie = cookieStr
-                                }
+                            val cookies = queryCookiesViaWebSocket(httpClient, wsUrl, login.cookieUrls)
+                            if (cookies.any { it.first in login.loggedInCookies }) {
+                                detectedCookie = cookies.toMap()
                             }
                         }
                     }
@@ -151,7 +182,7 @@ object EdgeAuthService {
             h == "youtube.com" || h.endsWith(".youtube.com")
     }
 
-    private fun queryCookiesViaWebSocket(client: HttpClient, wsUrl: String): List<Pair<String, String>> {
+    private fun queryCookiesViaWebSocket(client: HttpClient, wsUrl: String, urls: List<String>): List<Pair<String, String>> {
         val resultFuture = CompletableFuture<String>()
         val sb = StringBuilder()
 
@@ -174,7 +205,8 @@ object EdgeAuthService {
                 .buildAsync(URI(wsUrl), listener)
                 .join()
 
-            val msg = """{"id":1,"method":"Network.getCookies","params":{"urls":["https://music.youtube.com","https://youtube.com"]}}"""
+            val urlList = urls.joinToString(",") { "\"$it\"" }
+            val msg = """{"id":1,"method":"Network.getCookies","params":{"urls":[$urlList]}}"""
             ws.sendText(msg, true)
 
             val responseJson = try {

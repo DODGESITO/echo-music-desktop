@@ -1,0 +1,23 @@
+diff --git a/shared/spotify/echo/music/iad1tya/spotify/SpotifyPlaybackResolver.kt b/shared/spotify/echo/music/iad1tya/spotify/SpotifyPlaybackResolver.kt
+index ca06acb..292e549 100644
+--- a/shared/spotify/echo/music/iad1tya/spotify/SpotifyPlaybackResolver.kt
++++ b/shared/spotify/echo/music/iad1tya/spotify/SpotifyPlaybackResolver.kt
+@@ -33,8 +33,8 @@ open class SpotifyPlaybackResolver @Inject constructor() {
+   open suspend fun resolveTrack(
+     track: SpotifyTrack,
+     hideExplicit: Boolean = false,
+-  ): SongItem? =
+-    try {
++  ): SongItem? {
++    return try {
+       val fastCached = getCached(track.id)
+       if (fastCached != null) {
+         return fastCached
+@@ -58,6 +58,7 @@ open class SpotifyPlaybackResolver @Inject constructor() {
+       Timber.tag("SpotifyResolver").w(e, "Error resolving track: ${track.name}")
+       null
+     }
++  }
+ 
+   open fun getCached(trackId: String): SongItem? = synchronized(trackCache) { trackCache[trackId] }
+ 

@@ -75,6 +75,7 @@ repositorio privado la app no encuentra las versiones.
 - Pausa al desconectar audífonos (Bluetooth o con cable) y sigue al reconectarlos
 - Music Flow (descubrir deslizando) y playlists con IA: crear, "De tus gustos" y modificar (con tu clave de OpenRouter o Mistral)
 - Modo video: el videoclip oficial en el reproductor, sincronizado (360p, lo que YouTube permite sin tokens especiales)
+- Spotify: tus playlists y Me gusta (cada canción se busca en YouTube Music) y los Canvas de Spotify
 - La cookie de YouTube y las claves se guardan cifradas con Windows (DPAPI)
 
 Los datos del usuario se guardan en `%USERPROFILE%\.echomusic`.
@@ -87,6 +88,7 @@ Los datos del usuario se guardan en `%USERPROFILE%\.echomusic`.
 | `src/shims/kotlin` | Reemplazos mínimos de `android.content.Context`, `android.util.Base64` y Timber para que el código compartido compile sin Android |
 | `src/test/kotlin` | Tests (los que usan red solo corren con `-DlyricsProbe=true`) |
 | `shared/` | Código tomado **sin cambios** de Echo Music (salvo los arreglos de `scripts/innertube-desktop.patch`) |
+| `shared/spotify` | Cliente de Spotify de Echo Music (biblioteca, Canvas y búsqueda en YouTube Music); arreglo en `scripts/spotify-desktop.patch` |
 | `shared/echo-app` | Archivos sueltos de la app de Echo Music: traducción, Last.fm, ListenBrainz, firma de Shazam |
 | `shared/echo-app-romanization` | `LyricsUtils.kt` de Echo Music; al compilar se usa solo la parte de romanización |
 
@@ -104,7 +106,7 @@ El script copia los módulos y archivos que usa la PC y vuelve a aplicar los arr
 
 ## Pendiente
 
-- Del celular: Jellyfin/Navidrome, biblioteca y Canvas de Spotify, tipografías
+- Del celular: Jellyfin/Navidrome, tipografías
 
 ## Licencia
 

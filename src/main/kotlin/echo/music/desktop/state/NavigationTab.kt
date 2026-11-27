@@ -21,5 +21,6 @@ enum class LibrarySubTab(val title: String) {
     ALBUMS("Álbumes"),
     ARTISTS("Artistas"),
     DOWNLOADS("Descargas"),
-    LOCAL("En este PC")
+    LOCAL("En este PC"),
+    SPOTIFY("Spotify")
 }

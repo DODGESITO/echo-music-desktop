@@ -2537,6 +2537,103 @@ class DesktopAppModel(
     }
 
     // Runs after every property above is initialized (init blocks run in declaration order).
+    // --- Spotify (tu biblioteca y sus Canvas) ---
+    private val _spotifyProfile = MutableStateFlow(echo.music.desktop.spotify.SpotifyAccount.profile())
+    val spotifyProfile: StateFlow<echo.music.desktop.spotify.SpotifyProfile?> = _spotifyProfile.asStateFlow()
+    private val _spotifyPlaylists = MutableStateFlow<List<echo.music.iad1tya.spotify.models.SpotifyPlaylist>>(emptyList())
+    val spotifyPlaylists: StateFlow<List<echo.music.iad1tya.spotify.models.SpotifyPlaylist>> = _spotifyPlaylists.asStateFlow()
+    private val _spotifyLikedCount = MutableStateFlow(0)
+    val spotifyLikedCount: StateFlow<Int> = _spotifyLikedCount.asStateFlow()
+    private val _spotifyLoading = MutableStateFlow(false)
+    val spotifyLoading: StateFlow<Boolean> = _spotifyLoading.asStateFlow()
+    /** Login progress or the last error, shown in the Spotify tab. */
+    private val _spotifyStatus = MutableStateFlow<String?>(null)
+    val spotifyStatus: StateFlow<String?> = _spotifyStatus.asStateFlow()
+    private val _spotifySigningIn = MutableStateFlow(false)
+    val spotifySigningIn: StateFlow<Boolean> = _spotifySigningIn.asStateFlow()
+
+    fun signInSpotify() {
+        if (_spotifySigningIn.value) return
+        _spotifySigningIn.value = true
+        _spotifyStatus.value = "Abriendo Spotify en una ventana de Edge…"
+        echo.music.desktop.spotify.SpotifyAccount.signIn(
+            onStatus = { _spotifyStatus.value = it }
+        ) { result ->
+            _spotifySigningIn.value = false
+            result.onSuccess { profile ->
+                _spotifyProfile.value = profile
+                _spotifyStatus.value = null
+                _statusMessage.value = "Conectado a Spotify como ${profile.name}"
+                loadSpotifyLibrary()
+            }.onFailure { _spotifyStatus.value = it.message ?: "No se pudo iniciar sesión" }
+        }
+    }
+
+    fun cancelSpotifySignIn() {
+        echo.music.desktop.spotify.SpotifyAccount.cancelSignIn()
+        _spotifySigningIn.value = false
+        _spotifyStatus.value = null
+    }
+
+    fun signOutSpotify() {
+        echo.music.desktop.spotify.SpotifyAccount.signOut()
+        _spotifyProfile.value = null
+        _spotifyPlaylists.value = emptyList()
+        _spotifyLikedCount.value = 0
+        _statusMessage.value = "Sesión de Spotify cerrada"
+    }
+
+    fun loadSpotifyLibrary() {
+        if (_spotifyProfile.value == null || _spotifyLoading.value) return
+        _spotifyLoading.value = true
+        scope.launch {
+            echo.music.desktop.spotify.SpotifyLibrary.playlists()
+                .onSuccess { _spotifyPlaylists.value = it; _spotifyStatus.value = null }
+                .onFailure {
+                    _spotifyStatus.value = it.message ?: "No se pudo leer tu biblioteca de Spotify"
+                    if (!echo.music.desktop.spotify.SpotifyAccount.isSignedIn) _spotifyProfile.value = null
+                }
+            _spotifyLikedCount.value = runCatching { echo.music.desktop.spotify.SpotifyLibrary.likedCount() }.getOrDefault(0)
+            _spotifyLoading.value = false
+        }
+    }
+
+    /** The Spotify playlist saved in this PC's library (after opening it once), if any. */
+    fun importedSpotifyPlaylist(spotifyId: String): UserPlaylist? = PlaylistStore.getPlaylist("spotify_$spotifyId")
+
+    /**
+     * Opens a Spotify playlist (or "Tus me gusta"): reads its songs, finds each one on YouTube Music
+     * and keeps it in the library as a playlist of this PC.
+     */
+    fun openSpotifyPlaylist(spotifyId: String, title: String, owner: String?, imageUrl: String?, refresh: Boolean = false) {
+        if (!refresh) importedSpotifyPlaylist(spotifyId)?.let { openPlaylistDetail(it); return }
+        runAi("Spotify · $title") { log ->
+            val tracks = echo.music.desktop.spotify.SpotifyLibrary.tracks(spotifyId) { n, total -> setTaskLog("Leyendo canciones de Spotify: $n de $total") }
+            if (tracks.isEmpty()) error("Esta lista no tiene canciones")
+            log("Buscando ${tracks.size} canciones en YouTube Music…")
+            val songs = echo.music.desktop.spotify.SpotifyLibrary.resolve(tracks, _prefs.value.hideExplicit) { done, total ->
+                setTaskLog("Buscando en YouTube Music: $done de $total")
+            }
+            if (songs.isEmpty()) error("No se encontró ninguna de las canciones en YouTube Music")
+            val playlist = UserPlaylist.fromSongs(
+                id = "spotify_$spotifyId",
+                title = title,
+                author = "Spotify" + (owner?.let { " • $it" } ?: ""),
+                thumbnailUrl = imageUrl ?: songs.firstOrNull()?.thumbnail,
+                sourceType = PlaylistSourceType.SPOTIFY,
+                songs = songs
+            )
+            PlaylistStore.savePlaylist(playlist)
+            _userPlaylists.value = PlaylistStore.getPlaylists()
+            openPlaylistDetail(playlist)
+            "\"$title\": ${songs.size} de ${tracks.size} canciones encontradas en YouTube Music"
+        }
+    }
+
+    private fun setTaskLog(line: String) {
+        _aiTask.value = _aiTask.value?.copy(log = line)
+    }
+
     // --- Modo video (videoclip oficial) ---
     private val _videoMode = MutableStateFlow(false)
     val videoMode: StateFlow<Boolean> = _videoMode.asStateFlow()
@@ -2983,6 +3080,8 @@ class DesktopAppModel(
         startHeadphoneWatch()
         startFlowFollower()
         startVideoFollower()
+        echo.music.desktop.canvas.CanvasService.spotifyCanvas = { title, artist -> echo.music.desktop.spotify.SpotifyLibrary.canvasUrl(title, artist) }
+        if (_spotifyProfile.value != null) loadSpotifyLibrary()
 
         // SponsorBlock: jump over marked parts (each one once per playback).
         scope.launch {

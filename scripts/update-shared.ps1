@@ -46,6 +46,24 @@ foreach ($src in $extracts.Keys) {
 Copy-Item (Join-Path $EchoMusic 'lyrics\src\main\kotlin\echo\music\iad1tya\lyrics\LyricsUtils.kt') `
     (Join-Path $root 'shared\echo-app-romanization\LyricsUtils.kt') -Force
 
+# Spotify client (the Android-only parts, session storage and queue, are rewritten in src/main)
+$spotifySrc = Join-Path $EchoMusic 'app\src\main\kotlin\com\music\echo\spotify'
+$spotifyDst = Join-Path $root 'shared\spotify\echo\music\iad1tya\spotify'
+if (Test-Path (Join-Path $root 'shared\spotify')) { Remove-Item -Recurse -Force (Join-Path $root 'shared\spotify') }
+New-Item -ItemType Directory -Force (Join-Path $spotifyDst 'models') | Out-Null
+foreach ($f in 'Spotify.kt', 'SpotifyAuth.kt', 'SpotifyHashProvider.kt', 'SpotifyMapper.kt', 'SpotifyPlaybackResolver.kt') {
+    Copy-Item (Join-Path $spotifySrc $f) (Join-Path $spotifyDst $f) -Force
+}
+Copy-Item (Join-Path $spotifySrc 'models\*.kt') (Join-Path $spotifyDst 'models') -Force
+# Kotlin 2.1 does not allow "return" inside an expression body (Echo Music uses 2.3)
+Push-Location $root
+try {
+    git apply scripts/spotify-desktop.patch
+    if ($LASTEXITCODE -ne 0) { Write-Warning "El parche de Spotify no aplicó limpio: revisa scripts\spotify-desktop.patch" }
+} finally {
+    Pop-Location
+}
+
 # Re-apply the desktop's fixes to innertube (paths in the patch are innertube/src/main/kotlin/...)
 Push-Location $root
 try {

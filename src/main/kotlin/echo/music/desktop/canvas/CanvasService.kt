@@ -21,6 +21,9 @@ import java.util.concurrent.TimeUnit
  * ~/.echomusic/canvas_cache (max ~150 MB, oldest removed first).
  */
 object CanvasService {
+    /** Spotify Canvas lookup (set by the app; returns null when not signed in or no match). */
+    @Volatile var spotifyCanvas: (suspend (title: String, artist: String) -> String?)? = null
+
     private const val MAX_SIDE = 768
     private const val CACHE_LIMIT_BYTES = 150L * 1024 * 1024
 
@@ -41,9 +44,11 @@ object CanvasService {
             return@withContext cached
         }
         if (songId in missing) return@withContext null
-        val artwork = runCatching { lookup(title, artist, album) }.getOrNull()
-        val url = artwork?.preferredAnimationUrl
-        if (url.isNullOrBlank() || !artistMatches(artist, artwork.artist)) {
+        // Spotify's own Canvas first (its lookup already checks the artist), then Apple Music / Tidal.
+        val spotifyUrl = runCatching { spotifyCanvas?.invoke(title, artist) }.getOrNull()?.takeIf { it.isNotBlank() }
+        val artwork = if (spotifyUrl == null) runCatching { lookup(title, artist, album) }.getOrNull() else null
+        val url = spotifyUrl ?: artwork?.preferredAnimationUrl
+        if (url.isNullOrBlank() || (spotifyUrl == null && !artistMatches(artist, artwork?.artist))) {
             missing += songId
             return@withContext null
         }
