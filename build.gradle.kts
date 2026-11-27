@@ -45,7 +45,7 @@ val sharedRomanization = tasks.register("syncSharedRomanization") {
 
 /** App version: used by the installers and shown/compared by the update checker. */
 // -PappVersion=x.y.z builds another version (used to test updates).
-val appVersion = (findProperty("appVersion") as String?) ?: "1.3.4"
+val appVersion = (findProperty("appVersion") as String?) ?: "1.3.5"
 
 val versionResource = tasks.register("generateVersionResource") {
     val target = layout.buildDirectory.file("generated/versionResource/echo-version.txt")
