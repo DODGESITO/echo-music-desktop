@@ -122,6 +122,35 @@ object FavoritesStore {
         }
     }
 
+    /**
+     * Adds the songs liked on YouTube Music that are not favorites yet, in one write.
+     * Returns how many were added.
+     */
+    @Synchronized
+    fun mergeSyncedFavorites(remote: List<SongItem>): Int {
+        val merged = mergeFavorites(currentData.favorites, remote)
+        val added = merged.size - currentData.favorites.size
+        if (added > 0) {
+            currentData = currentData.copy(favorites = merged)
+            save()
+        }
+        return added
+    }
+
+    /**
+     * [remote] comes newest first (YouTube's order). New songs go on top in that same order;
+     * songs already saved keep their place.
+     */
+    internal fun mergeFavorites(local: List<SavedSong>, remote: List<SongItem>): List<SavedSong> {
+        val known = local.mapTo(HashSet()) { it.id }
+        val now = System.currentTimeMillis()
+        val added = remote
+            .filter { known.add(it.id) }
+            // Keep the timestamps in the same order as the list (newest liked = newest timestamp)
+            .mapIndexed { index, song -> SavedSong.fromSongItem(song).copy(timestamp = now - index) }
+        return added + local
+    }
+
     @Synchronized
     fun addToHistory(song: SongItem) {
         val saved = SavedSong.fromSongItem(song)

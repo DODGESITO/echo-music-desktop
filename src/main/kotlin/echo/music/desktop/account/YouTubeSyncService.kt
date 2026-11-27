@@ -206,10 +206,8 @@ object YouTubeSyncService {
             // Also sync Liked Music (LM)
             try {
                 val likedSongs = fetchPlaylistSongs("LM")
-                for (song in likedSongs) {
-                    FavoritesStore.addFavorite(song)
-                }
-                println("[YouTubeSync] Synced ${likedSongs.size} liked songs into favorites")
+                val added = FavoritesStore.mergeSyncedFavorites(likedSongs)
+                println("[YouTubeSync] ${likedSongs.size} liked songs on YouTube, $added new in favorites")
             } catch (ignored: Exception) {}
 
             Result.success(syncedPlaylists)
