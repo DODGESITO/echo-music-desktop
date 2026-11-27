@@ -39,7 +39,14 @@ import echo.music.desktop.ui.screens.SettingsScreen
 import echo.music.desktop.ui.theme.EchoDesktopTheme
 import echo.music.desktop.ui.theme.NothingColors
 
-fun main(args: Array<String>) = if (installPendingUpdate()) Unit else application {
+fun main(args: Array<String>) {
+    // Already open (maybe hidden in the tray): show that one instead of opening a second copy.
+    if (!echo.music.desktop.system.SingleInstance.acquire(show = echo.music.desktop.system.WindowsStartup.MINIMIZED_ARG !in args)) return
+    if (installPendingUpdate()) return
+    runApp(args)
+}
+
+private fun runApp(args: Array<String>) = application {
     val prefs = PreferencesStore.current
     remember { echo.music.desktop.ui.theme.NothingColors.applyTheme(prefs.themeAccent, prefs.themeBackground) }
     val windowState = rememberWindowState(
@@ -297,6 +304,17 @@ fun main(args: Array<String>) = if (installPendingUpdate()) Unit else applicatio
             }
         }
     ) {
+        // Echo Music opened again while running: bring this window forward.
+        LaunchedEffect(Unit) {
+            echo.music.desktop.system.SingleInstance.showRequests.collect {
+                isMiniPlayerOpen = false
+                isWindowVisible = true
+                windowState.isMinimized = false
+                window.toFront()
+                window.requestFocus()
+            }
+        }
+
         // Windows media panel (title, artist, cover, ⏮ ⏯ ⏭ and progress next to the volume indicator).
         val mainWindow = window
         // Same actions for the Windows media panel and the taskbar preview buttons.

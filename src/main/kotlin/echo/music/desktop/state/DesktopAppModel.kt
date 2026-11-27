@@ -3102,8 +3102,12 @@ class DesktopAppModel(
         playerEngine.setPlaybackRate(_prefs.value.playbackSpeed)
         echo.music.desktop.system.WindowsStartup.refresh(_prefs.value.startMinimized)
         echo.music.desktop.system.UpdateInstaller.takeLastOutcome()?.let { (version, code) ->
-            _statusMessage.value = if (code == 0) "Echo Music se actualizó a la versión $version"
-            else "No se pudo instalar la versión $version (código $code)"
+            _statusMessage.value = when (code) {
+                0 -> "Echo Music se actualizó a la versión $version"
+                3010 -> "La versión $version termina de instalarse al reiniciar Windows"
+                1618 -> "Windows estaba instalando otra cosa; la versión $version se intentará de nuevo"
+                else -> "No se pudo instalar la versión $version (código $code)"
+            }
         }
         startUpdateWatch()
         if (_prefs.value.localMusicFolders.isNotEmpty()) rescanLocalMusic()

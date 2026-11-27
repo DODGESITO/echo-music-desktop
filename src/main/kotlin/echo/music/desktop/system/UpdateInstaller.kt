@@ -120,11 +120,12 @@ object UpdateInstaller {
         outcomeFile.delete()
         val version = pendingVersion()
         clear()
+        // 3010: installed, Windows asks for a restart to finish (some file was in use).
         (version ?: AppInfo.version) to (text.toIntOrNull() ?: -1)
     }.getOrNull()
 
     fun clear() {
-        dir.listFiles()?.forEach { it.delete() }
+        dir.listFiles()?.filter { it.name != "install.log" }?.forEach { it.delete() }
     }
 
     // ------------------------------------------------------------------ install
@@ -143,15 +144,26 @@ object UpdateInstaller {
         val pids = listOfNotNull(self.pid(), self.parent().orElse(null)
             ?.takeIf { p -> p.info().command().orElse("").endsWith("EchoMusic.exe", ignoreCase = true) }
             ?.pid())
+        SingleInstance.release()
         val script = File(dir, "install-update.ps1")
         script.writeText(
             buildString {
                 appendLine("\$ErrorActionPreference = 'Continue'")
                 appendLine("foreach (\$id in @(${pids.joinToString(",")})) { try { Wait-Process -Id \$id -Timeout 120 -ErrorAction Stop } catch {} }")
-                appendLine("Start-Sleep -Milliseconds 800")
+                // Any other copy of Echo Music still open (e.g. hidden in the tray) keeps the files in
+                // use and Windows could only replace them after a reboot: close it first.
+                appendLine("\$exe = ${ps(exe)}")
+                appendLine("Get-Process -Name EchoMusic -ErrorAction SilentlyContinue | Where-Object { \$_.Path -eq \$exe } | Stop-Process -Force -ErrorAction SilentlyContinue")
+                appendLine("Start-Sleep -Seconds 2")
                 appendLine("\$log = ${ps(File(dir, "install.log").absolutePath)}")
-                appendLine("\$p = Start-Process -FilePath 'msiexec.exe' -ArgumentList @('/i', '\"' + ${ps(msi.absolutePath)} + '\"', '/qn', '/norestart', '/l*v', '\"' + \$log + '\"') -Wait -PassThru")
-                appendLine("Set-Content -Path ${ps(outcomeFile.absolutePath)} -Value \$p.ExitCode")
+                // 1618: another installation is running; wait for it and try again.
+                appendLine("\$code = 1618")
+                appendLine("for (\$i = 0; \$i -lt 8 -and \$code -eq 1618; \$i++) {")
+                appendLine("  if (\$i -gt 0) { Start-Sleep -Seconds 15 }")
+                appendLine("  \$p = Start-Process -FilePath 'msiexec.exe' -ArgumentList @('/i', '\"' + ${ps(msi.absolutePath)} + '\"', '/qn', '/norestart', '/l*v', '\"' + \$log + '\"') -Wait -PassThru")
+                appendLine("  \$code = \$p.ExitCode")
+                appendLine("}")
+                appendLine("Set-Content -Path ${ps(outcomeFile.absolutePath)} -Value \$code")
                 val reopenArgs = if (reopenMinimized) " -ArgumentList '${WindowsStartup.MINIMIZED_ARG}'" else ""
                 appendLine("if (Test-Path ${ps(exe)}) { Start-Process -FilePath ${ps(exe)}$reopenArgs }")
             },
