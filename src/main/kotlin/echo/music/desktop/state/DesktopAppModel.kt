@@ -892,7 +892,7 @@ class DesktopAppModel(
     private val _isHomeLoading = MutableStateFlow(false)
     val isHomeLoading: StateFlow<Boolean> = _isHomeLoading.asStateFlow()
 
-    private val _searchQuery = MutableStateFlow("Top Hits")
+    private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
     private val _searchResults = MutableStateFlow<List<SongItem>>(emptyList())
@@ -997,7 +997,7 @@ class DesktopAppModel(
                 } catch (ignored: Throwable) {}
             }
             loadHomeContent()
-            search(_searchQuery.value)
+            if (_searchQuery.value.isNotBlank()) search(_searchQuery.value)
         }
     }
 

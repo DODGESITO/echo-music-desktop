@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Waves
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.*
@@ -81,9 +82,10 @@ private val contentCountries = listOf(
 
 /** Settings cards (the parent column spaces them) for playback (skip, normalization, speed, quality) and content filters. */
 @Composable
-fun PlaybackAndContentSettings(appModel: DesktopAppModel) {
+fun PlaybackAndContentSettings(appModel: DesktopAppModel, section: SettingsSection) {
     val prefs by appModel.prefs.collectAsState()
 
+    if (section == SettingsSection.APARIENCIA) {
     SettingsCard(title = "APARIENCIA", icon = Icons.Default.Palette) {
         SettingRowFrame {
             SettingTexts("Color de acento", "Botones, canción actual y detalles de toda la app.")
@@ -121,7 +123,9 @@ fun PlaybackAndContentSettings(appModel: DesktopAppModel) {
             onSelect = { v -> appModel.updatePreferences { it.copy(themeBackground = v) } }
         )
     }
+    }
 
+    if (section == SettingsSection.REPRODUCCION) {
     SettingsCard(title = "REPRODUCCIÓN", icon = Icons.Default.GraphicEq) {
         ToggleRow(
             title = "Saltar canción si falla",
@@ -168,7 +172,9 @@ fun PlaybackAndContentSettings(appModel: DesktopAppModel) {
             onSelect = { v -> appModel.updatePreferences { it.copy(audioQuality = v) } }
         )
     }
+    }
 
+    if (section == SettingsSection.REPRODUCCION) {
     SettingsCard(title = "CONTENIDO", icon = Icons.Default.FilterAlt) {
         ToggleRow(
             title = "Ocultar canciones explícitas",
@@ -207,7 +213,9 @@ fun PlaybackAndContentSettings(appModel: DesktopAppModel) {
             onSelect = { v -> appModel.updatePreferences { it.copy(contentCountry = v) } }
         )
     }
+    }
 
+    if (section == SettingsSection.LETRAS) {
     SettingsCard(title = "LETRAS: ROMANIZACIÓN Y TRADUCCIÓN", icon = Icons.Default.Translate) {
         ToggleRow(
             title = "Romanizar letras",
@@ -266,14 +274,23 @@ fun PlaybackAndContentSettings(appModel: DesktopAppModel) {
             onChange = { v -> appModel.updatePreferences { it.copy(lyricsAutoTranslate = v) } }
         )
     }
+    }
 
+    if (section == SettingsSection.REPRODUCCION) {
     MusicFlowSettings(appModel)
+    }
 
+    if (section == SettingsSection.PRIVACIDAD) {
     PrivacySettings(appModel)
+    }
 
+    if (section == SettingsSection.CUENTAS) {
     ScrobbleSettings(appModel)
+    }
 
+    if (section == SettingsSection.PRIVACIDAD) {
     BlocksAndBackupSettings(appModel)
+    }
 }
 
 @Composable
@@ -834,8 +851,11 @@ fun UpdateSettings(appModel: DesktopAppModel) {
             checked = prefs.autoInstallUpdates,
             onChange = { v -> appModel.updatePreferences { it.copy(autoInstallUpdates = v) } }
         )
-        Spacer(Modifier.height(10.dp))
-        OutlinedTextField(
+        var advanced by remember { mutableStateOf(false) }
+        TextButton(onClick = { advanced = !advanced }) {
+            Text(if (advanced) "Ocultar opciones avanzadas" else "Opciones avanzadas", color = NothingColors.TextMuted)
+        }
+        if (advanced) OutlinedTextField(
             value = repo,
             onValueChange = { repo = it },
             label = { Text("Repositorio de GitHub (dueño/nombre)") },
@@ -850,10 +870,10 @@ fun UpdateSettings(appModel: DesktopAppModel) {
                     }
                 }
         )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            "Solo funciona con un repositorio público, o con versiones publicadas en uno público.",
-            style = MaterialTheme.typography.labelSmall.copy(color = NothingColors.TextMuted)
+        if (advanced) Text(
+            "Repositorio de GitHub donde se publican las versiones (debe ser público).",
+            style = MaterialTheme.typography.labelSmall.copy(color = NothingColors.TextMuted),
+            modifier = Modifier.padding(top = 4.dp)
         )
     }
 }
@@ -889,5 +909,33 @@ private fun MusicFlowSettings(appModel: DesktopAppModel) {
             checked = prefs.flowHideRecent,
             onChange = { v -> appModel.updatePreferences { it.copy(flowHideRecent = v) } }
         )
+    }
+}
+
+/** Spotify account (Ajustes → Cuentas): sign in/out; the library itself is in Biblioteca → Spotify. */
+@Composable
+fun SpotifyAccountSettings(appModel: DesktopAppModel) {
+    val profile by appModel.spotifyProfile.collectAsState()
+    val signingIn by appModel.spotifySigningIn.collectAsState()
+    val status by appModel.spotifyStatus.collectAsState()
+    SettingsCard(title = "SPOTIFY", icon = Icons.Default.LibraryMusic) {
+        SettingRowFrame {
+            SettingTexts(
+                profile?.name ?: "Sin conectar",
+                if (profile != null) "Tus playlists y Me gusta están en Biblioteca → Spotify. También activa los Canvas de Spotify."
+                else status ?: "Conecta tu cuenta para ver tus playlists de Spotify aquí y usar sus Canvas."
+            )
+            if (profile != null) {
+                TextButton(onClick = {
+                    appModel.selectTab(echo.music.desktop.state.NavigationTab.LIBRARY)
+                    appModel.selectLibrarySubTab(echo.music.desktop.state.LibrarySubTab.SPOTIFY)
+                }) { Text("Ver biblioteca", color = NothingColors.AccentRed) }
+                TextButton(onClick = { appModel.signOutSpotify() }) { Text("Cerrar sesión", color = NothingColors.TextMuted) }
+            } else if (signingIn) {
+                TextButton(onClick = { appModel.cancelSpotifySignIn() }) { Text("Cancelar", color = NothingColors.TextMuted) }
+            } else {
+                TextButton(onClick = { appModel.signInSpotify() }) { Text("Iniciar sesión", color = Color(0xFF1DB954)) }
+            }
+        }
     }
 }

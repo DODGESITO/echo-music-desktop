@@ -413,7 +413,9 @@ fun main(args: Array<String>) = if (installPendingUpdate()) Unit else applicatio
 
                 val isFavorite = currentSong != null && appModel.isFavorite(currentSong!!.id)
 
-                Box(modifier = Modifier.fillMaxSize()) {
+                BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                    // Narrow windows: the sidebar shows icons only.
+                    val compactSidebar = maxWidth < 1100.dp
                     // Main layout: Sidebar + Screen Content
                     Row(
                         modifier = Modifier
@@ -438,7 +440,8 @@ fun main(args: Array<String>) = if (installPendingUpdate()) Unit else applicatio
                             listenTogetherRoomCode = listenTogetherRoomState?.roomCode,
                             onOpenListenTogetherModal = { appModel.openListenTogetherModal() },
                             onOpenEchoFind = { appModel.openEchoFind() },
-                            onOpenMusicFlow = { appModel.openMusicFlow() }
+                            onOpenMusicFlow = { appModel.openMusicFlow() },
+                            compact = compactSidebar
                         )
 
                         // Center / Right: Screen Switching with Crossfade

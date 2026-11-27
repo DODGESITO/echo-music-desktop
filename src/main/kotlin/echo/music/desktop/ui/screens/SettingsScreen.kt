@@ -7,6 +7,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
@@ -55,6 +57,7 @@ fun SettingsScreen(
     val sleepTimerRemainingSeconds by appModel.sleepTimerRemainingSeconds.collectAsState()
     val downloadedSongs by appModel.downloadedSongs.collectAsState()
     val downloadsDirectory by appModel.downloadsDirectory.collectAsState()
+    var section by remember { mutableStateOf(SettingsSection.CUENTAS) }
 
     Column(
         modifier = modifier
@@ -63,27 +66,41 @@ fun SettingsScreen(
             .padding(horizontal = 28.dp, vertical = 20.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
-        // Page Title
-        Column {
-            Text(
-                text = "AJUSTES",
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 2.sp,
-                    color = NothingColors.AccentRed
-                )
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Configuración del Sistema",
-                style = MaterialTheme.typography.headlineSmall.copy(
-                    fontWeight = FontWeight.Bold,
-                    color = NothingColors.TextPrimary
-                )
-            )
+        // Title and sections (instead of one endless page)
+        Text(
+            text = "Ajustes",
+            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold, color = NothingColors.TextPrimary)
+        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+        ) {
+            SettingsSection.entries.forEach { s ->
+                val selected = s == section
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(if (selected) NothingColors.AccentRed.copy(alpha = 0.14f) else NothingColors.Surface)
+                        .border(1.dp, if (selected) NothingColors.AccentRed.copy(alpha = 0.6f) else NothingColors.SurfaceBorder, RoundedCornerShape(20.dp))
+                        .clickable { section = s }
+                        .padding(horizontal = 14.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(s.icon, contentDescription = null, tint = if (selected) NothingColors.AccentRed else NothingColors.TextMuted, modifier = Modifier.size(15.dp))
+                    Spacer(modifier = Modifier.width(7.dp))
+                    Text(
+                        s.title,
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (selected) NothingColors.TextPrimary else NothingColors.TextSecondary,
+                            fontSize = 13.sp
+                        )
+                    )
+                }
+            }
         }
 
+        if (section == SettingsSection.CUENTAS) {
         // Section 1: YouTube Music Account Integration
         SettingsCard(
             title = "CUENTA DE YOUTUBE MUSIC",
@@ -191,39 +208,13 @@ fun SettingsScreen(
                 }
             }
         }
-
-        // Section 2: Spotify Playlist Importer
-        SettingsCard(
-            title = "IMPORTADOR DE SPOTIFY",
-            icon = Icons.Default.Download
-        ) {
-            Text(
-                text = "Pega cualquier enlace público de Spotify para transferir la lista de reproducción completa a tu biblioteca de Echo Music con soporte de audio de alta fidelidad.",
-                style = MaterialTheme.typography.bodySmall.copy(
-                    color = NothingColors.TextSecondary,
-                    lineHeight = 18.sp
-                )
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Button(
-                onClick = { appModel.openSpotifyImportModal() },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = SpotifyGreen,
-                    contentColor = Color.White
-                ),
-                shape = RoundedCornerShape(10.dp)
-            ) {
-                Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Importar Playlist desde Enlace",
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
-                )
-            }
         }
 
+        if (section == SettingsSection.CUENTAS) {
+            SpotifyAccountSettings(appModel)
+        }
+
+        if (section == SettingsSection.REPRODUCCION) {
         // Section: Audio DSP & Preferences
         SettingsCard(
             title = "AUDIO, ECUALIZADOR Y TRANSICIONES",
@@ -515,7 +506,9 @@ fun SettingsScreen(
                 }
             }
         }
+        }
 
+        if (section == SettingsSection.ACERCA) {
         // Section 3: Audio Engine
         SettingsCard(
             title = "MOTOR DE REPRODUCCIÓN",
@@ -538,7 +531,9 @@ fun SettingsScreen(
                 value = if (YouTube.visitorData != null) "Visitor Token Activo (YouTube Music)" else "Sesión pendiente"
             )
         }
+        }
 
+        if (section == SettingsSection.SISTEMA) {
         // Section 4: Storage & Session
         SettingsCard(
             title = "SESIÓN Y ALMACENAMIENTO",
@@ -739,7 +734,9 @@ fun SettingsScreen(
                 )
             }
         }
+        }
 
+        if (section == SettingsSection.CUENTAS) {
         // Section: Listen Together (Escuchar Juntos)
         val ltManager = appModel.listenTogetherManager
         val ltConnectionState by ltManager.connectionState.collectAsState()
@@ -848,10 +845,12 @@ fun SettingsScreen(
                 )
             }
         }
+        }
 
         // Sections: Playback (skip, normalization, speed, quality) and Content filters
-        PlaybackAndContentSettings(appModel)
+        PlaybackAndContentSettings(appModel, section)
 
+        if (section == SettingsSection.SISTEMA) {
         // Section: System Integration & Shortcuts
         SettingsCard(
             title = "INTEGRACIÓN DEL SISTEMA Y ATAJOS",
@@ -1017,9 +1016,13 @@ fun SettingsScreen(
                 }
             }
         }
+        }
 
+        if (section == SettingsSection.SISTEMA) {
         UpdateSettings(appModel)
+        }
 
+        if (section == SettingsSection.ACERCA) {
         // Section 5: About
         SettingsCard(
             title = "ACERCA DE ECHO MUSIC DESKTOP",
@@ -1041,6 +1044,7 @@ fun SettingsScreen(
                 label = "Diseño UI",
                 value = "Inspirado en Nothing OS 5.0 (Dark Minimalist & Dot Matrix)"
             )
+        }
         }
 
         Spacer(modifier = Modifier.height(20.dp))
@@ -1144,4 +1148,15 @@ private fun openFolderInExplorer(dir: File) {
     } catch (e: Exception) {
         println("[SettingsScreen] Error al abrir carpeta: ${e.message}")
     }
+}
+
+/** Settings are grouped by topic, one tab each. */
+enum class SettingsSection(val title: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
+    CUENTAS("Cuentas", Icons.Default.AccountCircle),
+    REPRODUCCION("Reproducción", Icons.Default.GraphicEq),
+    LETRAS("Letras e IA", Icons.Default.Translate),
+    APARIENCIA("Apariencia", Icons.Default.Palette),
+    PRIVACIDAD("Privacidad", Icons.Default.Lock),
+    SISTEMA("Sistema", Icons.Default.Computer),
+    ACERCA("Acerca de", Icons.Default.Info)
 }

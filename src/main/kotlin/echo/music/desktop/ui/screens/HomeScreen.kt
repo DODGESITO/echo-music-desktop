@@ -60,54 +60,22 @@ fun HomeScreen(
         modifier = modifier
             .fillMaxSize()
             .padding(horizontal = 28.dp, vertical = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(28.dp)
+        verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
-        // Hero Section
+        // Greeting
         item {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(NothingColors.Surface)
-                    .border(1.dp, NothingColors.SurfaceBorder, RoundedCornerShape(20.dp))
-                    .padding(24.dp)
-            ) {
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .clip(CircleShape)
-                                .background(NothingColors.AccentRed)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "NOTHING OS 5.0 • DESKTOP AUDIO",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontFamily = FontFamily.Monospace,
-                                color = NothingColors.AccentRed,
-                                letterSpacing = 2.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text(
-                        text = "Bienvenido a Echo Music",
-                        style = MaterialTheme.typography.headlineMedium.copy(
-                            fontWeight = FontWeight.Black,
-                            color = NothingColors.TextPrimary
-                        )
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "Disfruta de streaming nativo ilimitado con calidad cristalina AAC y motor VisionOS sin interrupciones.",
-                        style = MaterialTheme.typography.bodyMedium.copy(
-                            color = NothingColors.TextSecondary
-                        )
-                    )
-                }
-            }
+            val hour = java.time.LocalTime.now().hour
+            Text(
+                text = when (hour) {
+                    in 5..11 -> "Buenos días"
+                    in 12..18 -> "Buenas tardes"
+                    else -> "Buenas noches"
+                },
+                style = MaterialTheme.typography.headlineSmall.copy(
+                    fontWeight = FontWeight.Black,
+                    color = NothingColors.TextPrimary
+                )
+            )
         }
 
         // Smart recommendations

@@ -77,301 +77,128 @@ fun LibraryScreen(
             .fillMaxSize()
             .padding(horizontal = 28.dp, vertical = 20.dp)
     ) {
-        // Sub-tabs & Action Row
+        // Tabs across the whole width (they scroll sideways if the window is narrow).
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
         ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier
-                    .weight(1f, fill = false)
-                    .horizontalScroll(rememberScrollState())
-            ) {
-                LibrarySubTab.entries.forEach { subTab ->
-                    val isSelected = selectedSubTab == subTab
-                    val count = when (subTab) {
-                        LibrarySubTab.FAVORITES -> favorites.size
-                        LibrarySubTab.HISTORY -> history.size
-                        LibrarySubTab.PLAYLISTS -> userPlaylists.size
-                        LibrarySubTab.DOWNLOADS -> downloadedSongs.size
-                        LibrarySubTab.ALBUMS -> libraryAlbums.size
-                        LibrarySubTab.ARTISTS -> libraryArtists.size
-                        LibrarySubTab.LOCAL -> localTracks.size
-                        LibrarySubTab.SPOTIFY -> spotifyPlaylists.size
-                    }
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(if (isSelected) NothingColors.SurfaceElevated else NothingColors.Surface)
-                            .border(
-                                width = 1.dp,
-                                color = if (isSelected) NothingColors.AccentRed.copy(alpha = 0.5f) else NothingColors.SurfaceBorder,
-                                shape = RoundedCornerShape(12.dp)
-                            )
-                            .clickable { appModel.selectLibrarySubTab(subTab) }
-                            .padding(horizontal = 16.dp, vertical = 8.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                when (subTab) {
-                                    LibrarySubTab.FAVORITES -> Icons.Default.Favorite
-                                    LibrarySubTab.HISTORY -> Icons.Default.History
-                                    LibrarySubTab.PLAYLISTS -> Icons.AutoMirrored.Filled.QueueMusic
-                                    LibrarySubTab.DOWNLOADS -> Icons.Default.DownloadDone
-                                    LibrarySubTab.ALBUMS -> Icons.Default.Album
-                                    LibrarySubTab.ARTISTS -> Icons.Default.Person
-                                    LibrarySubTab.LOCAL -> Icons.Default.Computer
-                                    LibrarySubTab.SPOTIFY -> Icons.Default.LibraryMusic
-                                },
-                                contentDescription = null,
-                                tint = if (isSelected) NothingColors.AccentRed else NothingColors.TextMuted,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = subTab.title,
-                                style = MaterialTheme.typography.bodyMedium.copy(
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (isSelected) NothingColors.TextPrimary else NothingColors.TextSecondary,
-                                    fontSize = 13.sp
-                                )
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "($count)",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    color = NothingColors.TextMuted,
-                                    fontSize = 11.sp
-                                )
-                            )
-                        }
-                    }
+            LibrarySubTab.entries.forEach { subTab ->
+                val isSelected = selectedSubTab == subTab
+                val count = when (subTab) {
+                    LibrarySubTab.FAVORITES -> favorites.size
+                    LibrarySubTab.HISTORY -> history.size
+                    LibrarySubTab.PLAYLISTS -> userPlaylists.size
+                    LibrarySubTab.DOWNLOADS -> downloadedSongs.size
+                    LibrarySubTab.ALBUMS -> libraryAlbums.size
+                    LibrarySubTab.ARTISTS -> libraryArtists.size
+                    LibrarySubTab.LOCAL -> localTracks.size
+                    LibrarySubTab.SPOTIFY -> spotifyPlaylists.size
                 }
-            }
-
-            // Right Actions
-            if (selectedSubTab == LibrarySubTab.PLAYLISTS) {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    // AI playlists (with the user's own AI key)
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(NothingColors.SurfaceElevated)
-                            .border(1.dp, NothingColors.AccentRed.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
-                            .clickable { appModel.openAiCreate() }
-                            .padding(horizontal = 12.dp, vertical = 8.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = NothingColors.AccentRed, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Crear con IA",
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = Color.White, fontSize = 12.sp)
-                            )
-                        }
-                    }
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(NothingColors.SurfaceElevated)
-                            .border(1.dp, NothingColors.AccentRed.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
-                            .clickable { appModel.createTastePlaylist() }
-                            .padding(horizontal = 12.dp, vertical = 8.dp)
-                    ) {
-                        Text(
-                            text = "De tus gustos",
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = Color.White, fontSize = 12.sp)
-                        )
-                    }
-
-                    // New local playlist
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(NothingColors.SurfaceElevated)
-                            .border(1.dp, NothingColors.SurfaceBorder, RoundedCornerShape(10.dp))
-                            .clickable { appModel.openCreatePlaylist() }
-                            .padding(horizontal = 12.dp, vertical = 8.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Default.Add,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Nueva playlist",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White,
-                                    fontSize = 12.sp
-                                )
-                            )
-                        }
-                    }
-
-                    // Import Spotify Button
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(NothingColors.SurfaceElevated)
-                            .border(1.dp, SpotifyGreen.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
-                            .clickable { appModel.openSpotifyImportModal() }
-                            .padding(horizontal = 12.dp, vertical = 8.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Default.Download,
-                                contentDescription = null,
-                                tint = SpotifyGreen,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Importar de Spotify",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White,
-                                    fontSize = 12.sp
-                                )
-                            )
-                        }
-                    }
-
-                    // YouTube Sync Button
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(NothingColors.SurfaceElevated)
-                            .border(1.dp, NothingColors.AccentRed.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
-                            .clickable {
-                                if (ytAccount == null) {
-                                    appModel.openYouTubeLoginModal()
-                                } else {
-                                    appModel.syncYouTubePlaylists()
-                                }
-                            }
-                            .padding(horizontal = 12.dp, vertical = 8.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (isSyncingYouTube) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(14.dp),
-                                    color = NothingColors.AccentRed,
-                                    strokeWidth = 2.dp
-                                )
-                            } else {
-                                Icon(
-                                    if (ytAccount != null) Icons.Default.Sync else Icons.Default.CloudSync,
-                                    contentDescription = null,
-                                    tint = NothingColors.AccentRed,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = if (ytAccount != null) "Sincronizar YouTube" else "Conectar YouTube",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White,
-                                    fontSize = 12.sp
-                                )
-                            )
-                        }
-                    }
-                }
-            } else if (selectedSubTab == LibrarySubTab.DOWNLOADS) {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    // Disk space badge
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(NothingColors.SurfaceElevated)
-                            .border(1.dp, NothingColors.SurfaceBorder, RoundedCornerShape(10.dp))
-                            .padding(horizontal = 12.dp, vertical = 8.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Default.Storage,
-                                contentDescription = null,
-                                tint = NothingColors.TextMuted,
-                                modifier = Modifier.size(15.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = DownloadStore.getFormattedDiskSpace() + " en disco",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontFamily = FontFamily.Monospace,
-                                    color = NothingColors.TextSecondary,
-                                    fontSize = 11.sp
-                                )
-                            )
-                        }
-                    }
-
-                    if (displayList.isNotEmpty()) {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(NothingColors.AccentRed)
-                                .clickable { appModel.playSong(displayList.first(), displayList) }
-                                .padding(horizontal = 14.dp, vertical = 8.dp)
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    Icons.Default.PlayArrow,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "Reproducir sin conexión",
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White,
-                                        fontSize = 12.sp
-                                    )
-                                )
-                            }
-                        }
-                    }
-                }
-            } else if (displayList.isNotEmpty()) {
-                // Play All button for Favorites & History
-                Box(
+                Row(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(NothingColors.AccentRed)
-                        .clickable { appModel.playSong(displayList.first(), displayList) }
-                        .padding(horizontal = 14.dp, vertical = 8.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(if (isSelected) NothingColors.AccentRed.copy(alpha = 0.14f) else NothingColors.Surface)
+                        .border(1.dp, if (isSelected) NothingColors.AccentRed.copy(alpha = 0.6f) else NothingColors.SurfaceBorder, RoundedCornerShape(20.dp))
+                        .clickable { appModel.selectLibrarySubTab(subTab) }
+                        .padding(horizontal = 14.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.PlayArrow,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(18.dp)
+                    Icon(
+                        when (subTab) {
+                            LibrarySubTab.FAVORITES -> Icons.Default.Favorite
+                            LibrarySubTab.HISTORY -> Icons.Default.History
+                            LibrarySubTab.PLAYLISTS -> Icons.AutoMirrored.Filled.QueueMusic
+                            LibrarySubTab.DOWNLOADS -> Icons.Default.DownloadDone
+                            LibrarySubTab.ALBUMS -> Icons.Default.Album
+                            LibrarySubTab.ARTISTS -> Icons.Default.Person
+                            LibrarySubTab.LOCAL -> Icons.Default.Computer
+                            LibrarySubTab.SPOTIFY -> Icons.Default.LibraryMusic
+                        },
+                        contentDescription = null,
+                        tint = if (isSelected) NothingColors.AccentRed else NothingColors.TextMuted,
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Spacer(modifier = Modifier.width(7.dp))
+                    Text(
+                        text = subTab.title,
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isSelected) NothingColors.TextPrimary else NothingColors.TextSecondary,
+                            fontSize = 13.sp
                         )
+                    )
+                    if (count > 0) {
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "Reproducir todo",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                                fontSize = 12.sp
-                            )
+                            text = "$count",
+                            style = MaterialTheme.typography.labelSmall.copy(color = NothingColors.TextMuted, fontSize = 11.sp)
                         )
                     }
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        // What can be done in the selected tab (only when there is something).
+        val hasActions = selectedSubTab == LibrarySubTab.PLAYLISTS || selectedSubTab == LibrarySubTab.DOWNLOADS ||
+            ((selectedSubTab == LibrarySubTab.FAVORITES || selectedSubTab == LibrarySubTab.HISTORY) && displayList.isNotEmpty())
+        if (hasActions) {
+            Spacer(modifier = Modifier.height(14.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                when (selectedSubTab) {
+                    LibrarySubTab.PLAYLISTS -> {
+                        var newMenu by remember { mutableStateOf(false) }
+                        Box {
+                            LibraryAction(Icons.Default.Add, "Nueva", primary = true, trailing = Icons.Default.ArrowDropDown) { newMenu = true }
+                            DropdownMenu(expanded = newMenu, onDismissRequest = { newMenu = false }, containerColor = NothingColors.SurfaceElevated) {
+                                DropdownMenuItem(
+                                    text = { Text("Playlist vacía", color = NothingColors.TextPrimary) },
+                                    leadingIcon = { Icon(Icons.Default.Add, null, tint = NothingColors.TextSecondary) },
+                                    onClick = { newMenu = false; appModel.openCreatePlaylist() }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Crear con IA", color = NothingColors.TextPrimary) },
+                                    leadingIcon = { Icon(Icons.Default.AutoAwesome, null, tint = NothingColors.AccentRed) },
+                                    onClick = { newMenu = false; appModel.openAiCreate() }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("De tus gustos (IA)", color = NothingColors.TextPrimary) },
+                                    leadingIcon = { Icon(Icons.Default.AutoAwesome, null, tint = NothingColors.AccentRed) },
+                                    onClick = { newMenu = false; appModel.createTastePlaylist() }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Importar enlace de Spotify", color = NothingColors.TextPrimary) },
+                                    leadingIcon = { Icon(Icons.Default.Download, null, tint = SpotifyGreen) },
+                                    onClick = { newMenu = false; appModel.openSpotifyImportModal() }
+                                )
+                            }
+                        }
+                        LibraryAction(
+                            if (ytAccount != null) Icons.Default.Sync else Icons.Default.CloudSync,
+                            if (ytAccount != null) "Sincronizar YouTube" else "Conectar YouTube",
+                            loading = isSyncingYouTube
+                        ) {
+                            if (ytAccount == null) appModel.openYouTubeLoginModal() else appModel.syncYouTubePlaylists()
+                        }
+                    }
+                    LibrarySubTab.DOWNLOADS -> {
+                        if (displayList.isNotEmpty()) {
+                            LibraryAction(Icons.Default.PlayArrow, "Reproducir sin conexión", primary = true) {
+                                appModel.playSong(displayList.first(), displayList)
+                            }
+                        }
+                        Text(
+                            text = DownloadStore.getFormattedDiskSpace() + " en disco",
+                            style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, color = NothingColors.TextMuted, fontSize = 11.sp)
+                        )
+                    }
+                    else -> LibraryAction(Icons.Default.PlayArrow, "Reproducir todo", primary = true) {
+                        appModel.playSong(displayList.first(), displayList)
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(18.dp))
 
         // Content Area
         when (selectedSubTab) {
@@ -847,5 +674,31 @@ private fun ColumnScope.LibraryMessage(
                 shape = RoundedCornerShape(10.dp)
             ) { Text(buttonText) }
         }
+    }
+}
+
+@Composable
+private fun LibraryAction(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    primary: Boolean = false,
+    loading: Boolean = false,
+    trailing: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (primary) NothingColors.AccentRed else NothingColors.SurfaceElevated)
+            .border(1.dp, if (primary) NothingColors.AccentRed else NothingColors.SurfaceBorder, RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (loading) CircularProgressIndicator(modifier = Modifier.size(14.dp), color = NothingColors.AccentRed, strokeWidth = 2.dp)
+        else Icon(icon, contentDescription = null, tint = if (primary) Color.White else NothingColors.TextSecondary, modifier = Modifier.size(16.dp))
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(label, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = Color.White, fontSize = 12.sp))
+        if (trailing != null) Icon(trailing, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
     }
 }

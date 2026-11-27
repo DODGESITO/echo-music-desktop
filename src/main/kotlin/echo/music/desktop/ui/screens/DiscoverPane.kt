@@ -203,19 +203,9 @@ private fun MoodView(
 }
 
 @Composable
-private fun SectionHeader(label: String?, title: String, trailing: @Composable (() -> Unit)? = null) {
+private fun SectionHeader(@Suppress("UNUSED_PARAMETER") label: String?, title: String, trailing: @Composable (() -> Unit)? = null) {
     Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), verticalAlignment = Alignment.Bottom) {
         Column(Modifier.weight(1f)) {
-            if (label != null) {
-                Text(
-                    label,
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontFamily = FontFamily.Monospace,
-                        letterSpacing = 1.5.sp,
-                        color = NothingColors.AccentRed
-                    )
-                )
-            }
             Text(
                 title,
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = NothingColors.TextPrimary)

@@ -1,6 +1,8 @@
 package echo.music.desktop.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -151,14 +153,7 @@ fun ExpandedPlayerModal(
                     )
                 }
 
-                IconButton(onClick = onClose) {
-                    Icon(
-                        Icons.Default.Close,
-                        contentDescription = "Cerrar",
-                        tint = NothingColors.TextPrimary,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
+                Spacer(Modifier.size(48.dp))
             }
 
             // Main Content: 2-column layout (Left: Album Art & Controls, Right: Queue / Lyrics)
@@ -168,11 +163,16 @@ fun ExpandedPlayerModal(
                     .weight(1f),
                 horizontalArrangement = Arrangement.spacedBy(40.dp)
             ) {
-                // Left Column: Artwork & Player Controls
+                // Left Column: Artwork & Player Controls. The cover (or video) shrinks on short
+                // windows so the controls always fit; it scrolls as a last resort.
+                BoxWithConstraints(Modifier.weight(1.2f).fillMaxHeight()) {
+                val coverSize = (maxHeight - 385.dp).coerceIn(140.dp, 340.dp)
+                val videoWidth = minOf(maxWidth, 600.dp, (maxHeight - 385.dp).coerceAtLeast(140.dp) * (16f / 9f))
                 Column(
                     modifier = Modifier
-                        .weight(1.2f)
-                        .fillMaxHeight(),
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .heightIn(min = maxHeight),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
@@ -186,7 +186,7 @@ fun ExpandedPlayerModal(
                                 // Video mode: the music video instead of the cover, kept on the audio's time.
                                 Box(
                                     modifier = Modifier
-                                        .width(600.dp)
+                                        .width(videoWidth)
                                         .aspectRatio(16f / 9f)
                                         .clip(RoundedCornerShape(16.dp))
                                         .background(androidx.compose.ui.graphics.Color.Black),
@@ -207,12 +207,12 @@ fun ExpandedPlayerModal(
                             } else {
                             AmbientGlow(
                                 enabled = isAmbientGlowEnabled,
-                                size = 340.dp
+                                size = coverSize
                             )
 
                             Box(
                                 modifier = Modifier
-                                    .size(340.dp)
+                                    .size(coverSize)
                                     .clip(RoundedCornerShape(20.dp))
                                     .background(NothingColors.SurfaceElevated)
                                     .border(1.dp, NothingColors.SurfaceBorder, RoundedCornerShape(20.dp)),
@@ -254,7 +254,7 @@ fun ExpandedPlayerModal(
                             Text(videoState.message, color = NothingColors.TextMuted, style = MaterialTheme.typography.bodySmall)
                         }
 
-                        Spacer(modifier = Modifier.height(28.dp))
+                        Spacer(modifier = Modifier.height(20.dp))
 
                         // Title, Artist, Favorite
                         Row(
@@ -424,315 +424,70 @@ fun ExpandedPlayerModal(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(22.dp))
+                        Spacer(modifier = Modifier.height(18.dp))
 
-                        // Quick Action Buttons
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(14.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            // Radio Automix Button
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(NothingColors.SurfaceElevated)
-                                    .border(1.dp, NothingColors.SurfaceBorder, RoundedCornerShape(12.dp))
-                                    .clickable(onClick = onStartRadio)
-                                    .padding(horizontal = 16.dp, vertical = 9.dp)
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        Icons.Default.Radio,
-                                        contentDescription = null,
-                                        tint = NothingColors.AccentRed,
-                                        modifier = Modifier.size(17.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "Iniciar Radio",
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            fontFamily = FontFamily.Monospace,
-                                            fontWeight = FontWeight.Bold,
-                                            color = NothingColors.TextPrimary
-                                        )
-                                    )
-                                }
-                            }
-
-                            // Dislike Button (hides the song and skips it)
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(NothingColors.SurfaceElevated)
-                                    .border(1.dp, NothingColors.SurfaceBorder, RoundedCornerShape(12.dp))
-                                    .clickable(onClick = onDislike)
-                                    .padding(horizontal = 12.dp, vertical = 9.dp)
-                            ) {
-                                Icon(
-                                    Icons.Default.ThumbDown,
-                                    contentDescription = "No me gusta (saltar y no recomendar)",
-                                    tint = NothingColors.TextSecondary,
-                                    modifier = Modifier.size(17.dp)
-                                )
-                            }
-
-                            // Add to Playlist Button
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(NothingColors.SurfaceElevated)
-                                    .border(1.dp, NothingColors.SurfaceBorder, RoundedCornerShape(12.dp))
-                                    .clickable(onClick = onAddToPlaylist)
-                                    .padding(horizontal = 16.dp, vertical = 9.dp)
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        Icons.AutoMirrored.Filled.PlaylistAdd,
-                                        contentDescription = null,
-                                        tint = NothingColors.AccentRed,
-                                        modifier = Modifier.size(17.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "Agregar a playlist",
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            fontFamily = FontFamily.Monospace,
-                                            fontWeight = FontWeight.Bold,
-                                            color = NothingColors.TextPrimary
-                                        )
-                                    )
-                                }
-                            }
-
-                            // Equalizer Button
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(NothingColors.SurfaceElevated)
-                                    .border(1.dp, NothingColors.SurfaceBorder, RoundedCornerShape(12.dp))
-                                    .clickable(onClick = onOpenEqualizer)
-                                    .padding(horizontal = 16.dp, vertical = 9.dp)
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        Icons.Default.GraphicEq,
-                                        contentDescription = null,
-                                        tint = NothingColors.TextSecondary,
-                                        modifier = Modifier.size(17.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "Ecualizador",
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            fontFamily = FontFamily.Monospace,
-                                            fontWeight = FontWeight.Bold,
-                                            color = NothingColors.TextPrimary
-                                        )
-                                    )
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        // Row 2: Sleep Timer, Ambient Glow Aura, and Download
+                        // Actions: the three most used at hand, the rest in "Más".
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Sleep Timer Button with Dropdown
-                            var showSleepMenu by remember { mutableStateOf(false) }
+                            PlayerAction(Icons.AutoMirrored.Filled.PlaylistAdd, "Agregar a playlist", onClick = onAddToPlaylist)
+                            when {
+                                downloadProgress != null -> PlayerAction(Icons.Default.Download, "${(downloadProgress * 100).toInt()}%", active = true, loading = true) {}
+                                isDownloaded -> PlayerAction(Icons.Default.DownloadDone, "Descargada", active = true) {}
+                                else -> PlayerAction(Icons.Default.Download, "Descargar", onClick = onDownloadSong)
+                            }
+                            PlayerAction(Icons.Default.Radio, "Radio", onClick = onStartRadio)
+                            if (sleepTimerRemainingSeconds != null) {
+                                PlayerAction(
+                                    Icons.Default.Timer,
+                                    String.format(java.util.Locale.US, "%02d:%02d", sleepTimerRemainingSeconds / 60, sleepTimerRemainingSeconds % 60),
+                                    active = true,
+                                    onClick = onCancelSleepTimer
+                                )
+                            }
+                            var moreOpen by remember { mutableStateOf(false) }
+                            var timerOpen by remember { mutableStateOf(false) }
                             Box {
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(if (sleepTimerRemainingSeconds != null) NothingColors.AccentRed.copy(alpha = 0.15f) else NothingColors.SurfaceElevated)
-                                        .border(
-                                            1.dp,
-                                            if (sleepTimerRemainingSeconds != null) NothingColors.AccentRed else NothingColors.SurfaceBorder,
-                                            RoundedCornerShape(12.dp)
-                                        )
-                                        .clickable { showSleepMenu = true }
-                                        .padding(horizontal = 12.dp, vertical = 8.dp)
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(
-                                            Icons.Default.Timer,
-                                            contentDescription = null,
-                                            tint = if (sleepTimerRemainingSeconds != null) NothingColors.AccentRed else NothingColors.TextSecondary,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        val timerText = if (sleepTimerRemainingSeconds != null) {
-                                            val mins = sleepTimerRemainingSeconds / 60
-                                            val secs = sleepTimerRemainingSeconds % 60
-                                            String.format(java.util.Locale.US, "%02d:%02d", mins, secs)
-                                        } else {
-                                            "Temporizador"
-                                        }
-                                        Text(
-                                            text = timerText,
-                                            style = MaterialTheme.typography.labelSmall.copy(
-                                                fontFamily = FontFamily.Monospace,
-                                                fontWeight = FontWeight.Bold,
-                                                color = if (sleepTimerRemainingSeconds != null) NothingColors.AccentRed else NothingColors.TextPrimary,
-                                                fontSize = 11.sp
-                                            )
+                                PlayerAction(Icons.Default.MoreHoriz, "Más") { moreOpen = true }
+                                DropdownMenu(expanded = moreOpen, onDismissRequest = { moreOpen = false }, containerColor = NothingColors.SurfaceElevated) {
+                                    DropdownMenuItem(
+                                        text = { Text("Ecualizador", color = NothingColors.TextPrimary, fontSize = 13.sp) },
+                                        leadingIcon = { Icon(Icons.Default.GraphicEq, null, tint = NothingColors.TextSecondary) },
+                                        onClick = { moreOpen = false; onOpenEqualizer() }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Temporizador de apagado", color = NothingColors.TextPrimary, fontSize = 13.sp) },
+                                        leadingIcon = { Icon(Icons.Default.Timer, null, tint = NothingColors.TextSecondary) },
+                                        onClick = { moreOpen = false; timerOpen = true }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("No me gusta (no recomendar)", color = NothingColors.TextPrimary, fontSize = 13.sp) },
+                                        leadingIcon = { Icon(Icons.Default.ThumbDown, null, tint = NothingColors.TextSecondary) },
+                                        onClick = { moreOpen = false; onDislike() }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text(if (isAmbientGlowEnabled) "Quitar resplandor" else "Resplandor de la portada", color = NothingColors.TextPrimary, fontSize = 13.sp) },
+                                        leadingIcon = { Icon(Icons.Default.Flare, null, tint = if (isAmbientGlowEnabled) NothingColors.AccentRed else NothingColors.TextSecondary) },
+                                        onClick = { moreOpen = false; onToggleAmbientGlow() }
+                                    )
+                                }
+                                DropdownMenu(expanded = timerOpen, onDismissRequest = { timerOpen = false }, containerColor = NothingColors.SurfaceElevated) {
+                                    listOf(15, 30, 45, 60).forEach { minutes ->
+                                        DropdownMenuItem(
+                                            text = { Text("$minutes minutos", color = NothingColors.TextPrimary, fontSize = 13.sp) },
+                                            onClick = { timerOpen = false; onStartSleepTimer(minutes) }
                                         )
                                     }
-                                }
-
-                                DropdownMenu(
-                                    expanded = showSleepMenu,
-                                    onDismissRequest = { showSleepMenu = false },
-                                    modifier = Modifier
-                                        .background(NothingColors.SurfaceElevated)
-                                        .border(1.dp, NothingColors.SurfaceBorder, RoundedCornerShape(8.dp))
-                                ) {
-                                    DropdownMenuItem(
-                                        text = { Text("15 minutos", color = NothingColors.TextPrimary, fontSize = 13.sp) },
-                                        onClick = {
-                                            onStartSleepTimer(15)
-                                            showSleepMenu = false
-                                        }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text("30 minutos", color = NothingColors.TextPrimary, fontSize = 13.sp) },
-                                        onClick = {
-                                            onStartSleepTimer(30)
-                                            showSleepMenu = false
-                                        }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text("45 minutos", color = NothingColors.TextPrimary, fontSize = 13.sp) },
-                                        onClick = {
-                                            onStartSleepTimer(45)
-                                            showSleepMenu = false
-                                        }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text("60 minutos", color = NothingColors.TextPrimary, fontSize = 13.sp) },
-                                        onClick = {
-                                            onStartSleepTimer(60)
-                                            showSleepMenu = false
-                                        }
-                                    )
                                     DropdownMenuItem(
                                         text = { Text("Al terminar la canción", color = NothingColors.TextPrimary, fontSize = 13.sp) },
-                                        onClick = {
-                                            onSetSleepTimerEndOfSong()
-                                            showSleepMenu = false
-                                        }
+                                        onClick = { timerOpen = false; onSetSleepTimerEndOfSong() }
                                     )
                                     if (sleepTimerRemainingSeconds != null) {
                                         HorizontalDivider(color = NothingColors.SurfaceBorder)
                                         DropdownMenuItem(
                                             text = { Text("Desactivar temporizador", color = NothingColors.AccentRed, fontSize = 13.sp, fontWeight = FontWeight.Bold) },
-                                            onClick = {
-                                                onCancelSleepTimer()
-                                                showSleepMenu = false
-                                            }
-                                        )
-                                    }
-                                }
-                            }
-
-                            // Ambient Glow Toggle Button
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(if (isAmbientGlowEnabled) NothingColors.AccentRed.copy(alpha = 0.15f) else NothingColors.SurfaceElevated)
-                                    .border(
-                                        1.dp,
-                                        if (isAmbientGlowEnabled) NothingColors.AccentRed.copy(alpha = 0.5f) else NothingColors.SurfaceBorder,
-                                        RoundedCornerShape(12.dp)
-                                    )
-                                    .clickable(onClick = onToggleAmbientGlow)
-                                    .padding(horizontal = 12.dp, vertical = 8.dp)
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        Icons.Default.Flare,
-                                        contentDescription = null,
-                                        tint = if (isAmbientGlowEnabled) NothingColors.AccentRed else NothingColors.TextMuted,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = if (isAmbientGlowEnabled) "Aura ON" else "Aura OFF",
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            fontFamily = FontFamily.Monospace,
-                                            fontWeight = FontWeight.Bold,
-                                            color = if (isAmbientGlowEnabled) NothingColors.AccentRed else NothingColors.TextSecondary,
-                                            fontSize = 11.sp
-                                        )
-                                    )
-                                }
-                            }
-
-                            // Download Current Track Button
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(if (isDownloaded) NothingColors.AccentRed.copy(alpha = 0.15f) else NothingColors.SurfaceElevated)
-                                    .border(
-                                        1.dp,
-                                        if (isDownloaded) NothingColors.AccentRed.copy(alpha = 0.5f) else NothingColors.SurfaceBorder,
-                                        RoundedCornerShape(12.dp)
-                                    )
-                                    .clickable { if (!isDownloaded) onDownloadSong() }
-                                    .padding(horizontal = 12.dp, vertical = 8.dp)
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    if (downloadProgress != null) {
-                                        CircularProgressIndicator(
-                                            modifier = Modifier.size(13.dp),
-                                            color = NothingColors.AccentRed,
-                                            strokeWidth = 2.dp
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = "${(downloadProgress * 100).toInt()}%",
-                                            style = MaterialTheme.typography.labelSmall.copy(
-                                                fontFamily = FontFamily.Monospace,
-                                                fontWeight = FontWeight.Bold,
-                                                color = NothingColors.AccentRed,
-                                                fontSize = 11.sp
-                                            )
-                                        )
-                                    } else if (isDownloaded) {
-                                        Icon(
-                                            Icons.Default.DownloadDone,
-                                            contentDescription = null,
-                                            tint = NothingColors.AccentRed,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = "Descargada",
-                                            style = MaterialTheme.typography.labelSmall.copy(
-                                                fontFamily = FontFamily.Monospace,
-                                                fontWeight = FontWeight.Bold,
-                                                color = NothingColors.AccentRed,
-                                                fontSize = 11.sp
-                                            )
-                                        )
-                                    } else {
-                                        Icon(
-                                            Icons.Default.Download,
-                                            contentDescription = null,
-                                            tint = NothingColors.TextSecondary,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = "Descargar",
-                                            style = MaterialTheme.typography.labelSmall.copy(
-                                                fontFamily = FontFamily.Monospace,
-                                                fontWeight = FontWeight.Bold,
-                                                color = NothingColors.TextPrimary,
-                                                fontSize = 11.sp
-                                            )
+                                            onClick = { timerOpen = false; onCancelSleepTimer() }
                                         )
                                     }
                                 }
@@ -744,6 +499,8 @@ fun ExpandedPlayerModal(
                             style = MaterialTheme.typography.titleMedium.copy(color = NothingColors.TextMuted)
                         )
                     }
+                }
+
                 }
 
                 // Right Column: Tab Switcher (Cola de reproducción / Letras)
@@ -945,4 +702,35 @@ private fun formatMs(ms: Long): String {
     val minutes = totalSeconds / 60
     val seconds = totalSeconds % 60
     return String.format("%d:%02d", minutes, seconds)
+}
+
+@Composable
+private fun PlayerAction(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    active: Boolean = false,
+    loading: Boolean = false,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (active) NothingColors.AccentRed.copy(alpha = 0.15f) else NothingColors.SurfaceElevated)
+            .border(1.dp, if (active) NothingColors.AccentRed.copy(alpha = 0.5f) else NothingColors.SurfaceBorder, RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (loading) CircularProgressIndicator(modifier = Modifier.size(14.dp), color = NothingColors.AccentRed, strokeWidth = 2.dp)
+        else Icon(icon, contentDescription = null, tint = if (active) NothingColors.AccentRed else NothingColors.TextSecondary, modifier = Modifier.size(16.dp))
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontWeight = FontWeight.Bold,
+                color = if (active) NothingColors.AccentRed else NothingColors.TextPrimary,
+                fontSize = 12.sp
+            )
+        )
+    }
 }
