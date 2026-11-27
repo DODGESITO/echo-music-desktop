@@ -2983,7 +2983,7 @@ class DesktopAppModel(
         if (_update.value.checking) return
         _update.value = _update.value.copy(checking = true, message = null)
         scope.launch {
-            val repo = _prefs.value.updateRepo.ifBlank { echo.music.desktop.system.UpdateChecker.DEFAULT_REPO }
+            val repo = echo.music.desktop.system.UpdateChecker.DEFAULT_REPO
             val result = withContext(Dispatchers.IO) { echo.music.desktop.system.UpdateChecker.check(repo) }
             updatePreferences { it.copy(lastUpdateCheck = System.currentTimeMillis()) }
             _update.value = when (result) {
@@ -2998,6 +2998,39 @@ class DesktopAppModel(
             ) {
                 _updateBanner.value = result.info
                 if (_prefs.value.autoInstallUpdates) downloadUpdate(result.info)
+            }
+        }
+    }
+
+    /** Main window hidden in the tray (or started minimized): a ready update may install then. */
+    @Volatile private var windowHiddenSince: Long? = null
+
+    fun setWindowHidden(hidden: Boolean) {
+        windowHiddenSince = if (hidden) windowHiddenSince ?: System.currentTimeMillis() else null
+    }
+
+    /**
+     * The installed app looks for updates shortly after it opens and then every few hours (it
+     * usually stays open in the tray for days). A downloaded update installs when Echo Music
+     * closes, or by itself once the window has been in the tray for a while with nothing playing.
+     * Copies started from Gradle never check, so they do not touch the installed app's state.
+     */
+    private fun startUpdateWatch() {
+        if (echo.music.desktop.system.AppInfo.launcherPath == null) return
+        scope.launch {
+            delay(20_000)
+            while (true) {
+                if (_prefs.value.checkUpdates && _update.value.readyVersion == null) checkForUpdates(manual = false)
+                delay(3 * 60 * 60 * 1000L)
+            }
+        }
+        scope.launch {
+            while (true) {
+                delay(60_000)
+                val hiddenSince = windowHiddenSince ?: continue
+                if (_update.value.readyVersion == null || !_prefs.value.autoInstallUpdates) continue
+                if (playbackState.value.isPlaying || System.currentTimeMillis() - hiddenSince < 5 * 60_000L) continue
+                restartToUpdate()
             }
         }
     }
@@ -3072,9 +3105,7 @@ class DesktopAppModel(
             _statusMessage.value = if (code == 0) "Echo Music se actualizó a la versión $version"
             else "No se pudo instalar la versión $version (código $code)"
         }
-        if (_prefs.value.checkUpdates && System.currentTimeMillis() - _prefs.value.lastUpdateCheck > 24 * 60 * 60 * 1000L) {
-            checkForUpdates(manual = false)
-        }
+        startUpdateWatch()
         if (_prefs.value.localMusicFolders.isNotEmpty()) rescanLocalMusic()
         startScrobbleTracking()
         startHeadphoneWatch()
@@ -3134,7 +3165,9 @@ class DesktopAppModel(
         playerEngine.release()
         // A downloaded update installs now, while Echo Music is closed, and opens it again.
         if (_prefs.value.autoInstallUpdates && echo.music.desktop.system.UpdateInstaller.canAutoInstall) {
-            echo.music.desktop.system.UpdateInstaller.pendingInstaller()?.let { echo.music.desktop.system.UpdateInstaller.installAfterExit(it) }
+            echo.music.desktop.system.UpdateInstaller.pendingInstaller()?.let {
+                echo.music.desktop.system.UpdateInstaller.installAfterExit(it, reopenMinimized = windowHiddenSince != null)
+            }
         }
     }
 }

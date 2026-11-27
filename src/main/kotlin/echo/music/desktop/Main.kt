@@ -83,6 +83,8 @@ fun main(args: Array<String>) = if (installPendingUpdate()) Unit else applicatio
         }
     }
 
+    LaunchedEffect(isWindowVisible) { appModel.setWindowHidden(!isWindowVisible) }
+
     // "Reiniciar ahora" of a downloaded update: close normally (release() starts the installer).
     LaunchedEffect(Unit) {
         appModel.exitRequests.collect {

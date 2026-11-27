@@ -133,7 +133,7 @@ object UpdateInstaller {
      * Starts a hidden helper that waits until Echo Music has closed, installs [msi] silently and
      * opens Echo Music again. Call it right before exiting.
      */
-    fun installAfterExit(msi: File): Boolean {
+    fun installAfterExit(msi: File, reopenMinimized: Boolean = false): Boolean {
         val exe = AppInfo.launcherPath ?: return false
         dir.mkdirs()
         outcomeFile.delete()
@@ -152,7 +152,8 @@ object UpdateInstaller {
                 appendLine("\$log = ${ps(File(dir, "install.log").absolutePath)}")
                 appendLine("\$p = Start-Process -FilePath 'msiexec.exe' -ArgumentList @('/i', '\"' + ${ps(msi.absolutePath)} + '\"', '/qn', '/norestart', '/l*v', '\"' + \$log + '\"') -Wait -PassThru")
                 appendLine("Set-Content -Path ${ps(outcomeFile.absolutePath)} -Value \$p.ExitCode")
-                appendLine("if (Test-Path ${ps(exe)}) { Start-Process -FilePath ${ps(exe)} }")
+                val reopenArgs = if (reopenMinimized) " -ArgumentList '${WindowsStartup.MINIMIZED_ARG}'" else ""
+                appendLine("if (Test-Path ${ps(exe)}) { Start-Process -FilePath ${ps(exe)}$reopenArgs }")
             },
             Charsets.UTF_8
         )

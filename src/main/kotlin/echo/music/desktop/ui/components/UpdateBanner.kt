@@ -56,7 +56,7 @@ fun UpdateBanner(
         if (info.notes.isNotBlank()) {
             Spacer(Modifier.height(6.dp))
             Text(
-                info.notes,
+                plainNotes(info.notes),
                 maxLines = 4,
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodySmall.copy(color = NothingColors.TextSecondary)
@@ -85,3 +85,13 @@ fun UpdateBanner(
         }
     }
 }
+
+/** GitHub release notes without Markdown marks: no headings, bold, code or link syntax. */
+internal fun plainNotes(markdown: String): String = markdown.lines()
+    .map { it.trim() }
+    .filter { it.isNotEmpty() && !it.startsWith("#") }
+    .joinToString("\n") { line ->
+        line.replace(Regex("""\[([^\]]+)]\([^)]*\)"""), "$1")
+            .replace("**", "").replace("`", "")
+            .replace(Regex("""^[-*] """), "• ")
+    }

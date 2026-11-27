@@ -802,13 +802,12 @@ fun StartupSettingsRows(appModel: DesktopAppModel) {
 fun UpdateSettings(appModel: DesktopAppModel) {
     val prefs by appModel.prefs.collectAsState()
     val update by appModel.update.collectAsState()
-    var repo by remember { mutableStateOf(prefs.updateRepo) }
 
     SettingsCard(title = "ACTUALIZACIONES", icon = Icons.Default.SystemUpdate) {
         SettingRowFrame {
             SettingTexts(
                 "Versión ${echo.music.desktop.system.AppInfo.version}",
-                update.message ?: "Busca versiones nuevas en las publicaciones (releases) de GitHub."
+                update.message ?: "Busca versiones nuevas de Echo Music."
             )
             when {
                 update.readyVersion != null -> TextButton(onClick = { appModel.restartToUpdate() }) {
@@ -836,7 +835,7 @@ fun UpdateSettings(appModel: DesktopAppModel) {
         Spacer(Modifier.height(10.dp))
         ToggleRow(
             title = "Buscar al iniciar",
-            description = "Una vez al día, al abrir Echo Music.",
+            description = "Al abrir Echo Music y cada pocas horas mientras está abierto.",
             checked = prefs.checkUpdates,
             onChange = { v -> appModel.updatePreferences { it.copy(checkUpdates = v) } }
         )
@@ -844,36 +843,12 @@ fun UpdateSettings(appModel: DesktopAppModel) {
         ToggleRow(
             title = "Instalar actualizaciones solas",
             description = if (appModel.canAutoInstallUpdates) {
-                "Descarga la versión nueva en segundo plano y la instala sin pedir permisos al cerrar Echo Music."
+                "La descarga en segundo plano y la instala sin pedir permisos al cerrar Echo Music, o sola si está en la bandeja sin sonar nada."
             } else {
                 "Solo en la versión instalada con el instalador. Aquí solo te avisa y abre la página de descarga."
             },
             checked = prefs.autoInstallUpdates,
             onChange = { v -> appModel.updatePreferences { it.copy(autoInstallUpdates = v) } }
-        )
-        var advanced by remember { mutableStateOf(false) }
-        TextButton(onClick = { advanced = !advanced }) {
-            Text(if (advanced) "Ocultar opciones avanzadas" else "Opciones avanzadas", color = NothingColors.TextMuted)
-        }
-        if (advanced) OutlinedTextField(
-            value = repo,
-            onValueChange = { repo = it },
-            label = { Text("Repositorio de GitHub (dueño/nombre)") },
-            singleLine = true,
-            colors = fieldColors(),
-            modifier = Modifier
-                .fillMaxWidth()
-                .onFocusChanged { f ->
-                    appModel.isInputFocused = f.isFocused
-                    if (!f.isFocused && repo.trim() != prefs.updateRepo) {
-                        appModel.updatePreferences { it.copy(updateRepo = repo.trim()) }
-                    }
-                }
-        )
-        if (advanced) Text(
-            "Repositorio de GitHub donde se publican las versiones (debe ser público).",
-            style = MaterialTheme.typography.labelSmall.copy(color = NothingColors.TextMuted),
-            modifier = Modifier.padding(top = 4.dp)
         )
     }
 }
