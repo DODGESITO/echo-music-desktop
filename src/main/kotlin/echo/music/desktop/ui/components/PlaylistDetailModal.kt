@@ -1,6 +1,8 @@
 package echo.music.desktop.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -59,6 +61,37 @@ fun PlaylistDetailModal(
     val canRemove = remember(playlist, userPlaylists, ytAccount) { appModel.canRemoveFromPlaylist(playlist) }
     var reorderMode by remember(playlist.id) { mutableStateOf(false) }
     var renaming by remember(playlist.id) { mutableStateOf(false) }
+    var confirmDelete by remember(playlist.id) { mutableStateOf(false) }
+
+    if (confirmDelete) {
+        val fromYouTube = playlist.sourceType == PlaylistSourceType.YOUTUBE_MUSIC
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            containerColor = NothingColors.SurfaceElevated,
+            icon = { Icon(Icons.Default.Delete, null, tint = NothingColors.AccentRed) },
+            title = {
+                Text(
+                    if (fromYouTube) "¿Quitar \"${playlist.title}\" de tu biblioteca?" else "¿Eliminar \"${playlist.title}\"?",
+                    color = NothingColors.TextPrimary
+                )
+            },
+            text = {
+                Text(
+                    if (fromYouTube) "Solo se quita de Echo Music; en tu cuenta de YouTube Music sigue igual y vuelve al sincronizar."
+                    else "Se borra la playlist y sus ${playlist.songs.size} canciones de la lista. Las canciones descargadas no se borran.",
+                    color = NothingColors.TextSecondary
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDelete = false
+                    appModel.deletePlaylist(playlist.id)
+                    onClose()
+                }) { Text(if (fromYouTube) "Quitar" else "Eliminar", color = NothingColors.AccentRed) }
+            },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancelar", color = NothingColors.TextSecondary) } }
+        )
+    }
 
     if (renaming) {
         RenamePlaylistDialog(
@@ -87,8 +120,9 @@ fun PlaylistDetailModal(
         // Main Content Card
         Box(
             modifier = Modifier
-                .width(900.dp)
-                .fillMaxHeight(0.88f)
+                .widthIn(max = 900.dp)
+                .fillMaxWidth(0.94f)
+                .fillMaxHeight(0.9f)
                 .clip(RoundedCornerShape(24.dp))
                 .background(NothingColors.SurfaceElevated)
                 .border(1.dp, NothingColors.SurfaceBorder, RoundedCornerShape(24.dp))
@@ -100,49 +134,12 @@ fun PlaylistDetailModal(
                 .padding(28.dp)
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
-                // Top close bar
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    when (playlist.sourceType) {
-                                        PlaylistSourceType.SPOTIFY -> Color(0xFF1DB954)
-                                        PlaylistSourceType.YOUTUBE_MUSIC -> NothingColors.AccentRed
-                                        PlaylistSourceType.LOCAL -> NothingColors.TextSecondary
-                                        PlaylistSourceType.PODCAST -> Color(0xFF9C6ADE)
-                                    }
-                                )
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "DETALLE DE LISTA DE REPRODUCCIÓN",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontFamily = FontFamily.Monospace,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 2.sp,
-                                color = NothingColors.TextMuted
-                            )
-                        )
-                    }
-
+                // Close
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     IconButton(onClick = onClose) {
-                        Icon(
-                            Icons.Default.Close,
-                            contentDescription = "Cerrar",
-                            tint = NothingColors.TextSecondary,
-                            modifier = Modifier.size(22.dp)
-                        )
+                        Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = NothingColors.TextSecondary, modifier = Modifier.size(22.dp))
                     }
                 }
-
-                Spacer(modifier = Modifier.height(16.dp))
 
                 // Playlist Banner (Cover + Metadata + Actions)
                 Row(
@@ -239,228 +236,72 @@ fun PlaylistDetailModal(
 
                         Spacer(modifier = Modifier.height(4.dp))
 
-                        // Actions
+                        // Actions: one main button, the rest as icons (name on hover) so they always fit.
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            if (playlist.sourceType == PlaylistSourceType.LOCAL && isInLibrary && playlist.songs.isNotEmpty()) {
+                            if (playlist.songs.isNotEmpty()) {
+                                Button(
+                                    onClick = { appModel.playPlaylist(playlist, startIndex = 0) },
+                                    colors = ButtonDefaults.buttonColors(containerColor = NothingColors.AccentRed, contentColor = Color.White),
+                                    shape = RoundedCornerShape(24.dp),
+                                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp)
+                                ) {
+                                    Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Reproducir", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold))
+                                }
+                            }
+                            if (!isInLibrary) {
                                 OutlinedButton(
-                                    onClick = { appModel.openAiModify(playlist.id) },
+                                    onClick = { appModel.savePlaylistToLibrary(playlist) },
                                     colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, NothingColors.AccentRed.copy(alpha = 0.5f)),
-                                    shape = RoundedCornerShape(10.dp),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, NothingColors.SurfaceBorder),
+                                    shape = RoundedCornerShape(24.dp),
                                     contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
                                 ) {
-                                    Icon(Icons.Default.AutoAwesome, null, tint = NothingColors.AccentRed, modifier = Modifier.size(16.dp))
+                                    Icon(Icons.Default.LibraryAdd, contentDescription = null, modifier = Modifier.size(16.dp))
                                     Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Modificar con IA")
+                                    Text("Guardar en biblioteca")
+                                }
+                            }
+
+                            if (playlist.songs.isNotEmpty()) {
+                                when {
+                                    isPlaylistDownloading -> HeaderIcon(
+                                        Icons.Default.Download,
+                                        "Descargando $downloadedCount de ${playlist.songs.size} · clic para cancelar",
+                                        loading = true
+                                    ) { appModel.cancelPlaylistDownload(playlist.id) }
+                                    isFullyDownloaded -> HeaderIcon(Icons.Default.DownloadDone, "Descargada completa", tint = Color(0xFF4CAF50)) {}
+                                    else -> HeaderIcon(
+                                        Icons.Default.Download,
+                                        if (downloadedCount > 0) "Descargar las ${playlist.songs.size - downloadedCount} que faltan" else "Descargar playlist"
+                                    ) { appModel.downloadPlaylist(playlist) }
+                                }
+                            }
+                            if (playlist.sourceType == PlaylistSourceType.YOUTUBE_MUSIC && isInLibrary) {
+                                HeaderIcon(Icons.Default.Sync, if (isRefreshing) "Sincronizando…" else "Traer los cambios de YouTube Music", loading = isRefreshing) {
+                                    if (!isRefreshing) {
+                                        isRefreshing = true
+                                        appModel.refreshYouTubePlaylist(playlist) { isRefreshing = false }
+                                    }
                                 }
                             }
                             if (canEdit && playlist.songs.size > 1) {
-                                OutlinedButton(
-                                    onClick = { reorderMode = !reorderMode },
-                                    colors = ButtonDefaults.outlinedButtonColors(
-                                        contentColor = if (reorderMode) NothingColors.AccentRed else Color.White
-                                    ),
-                                    border = androidx.compose.foundation.BorderStroke(
-                                        1.dp, if (reorderMode) NothingColors.AccentRed else NothingColors.SurfaceBorder
-                                    ),
-                                    shape = RoundedCornerShape(10.dp),
-                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
-                                ) {
-                                    Icon(Icons.Default.SwapVert, null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(if (reorderMode) "Listo" else "Ordenar")
+                                HeaderIcon(Icons.Default.SwapVert, if (reorderMode) "Terminar de ordenar" else "Ordenar canciones", active = reorderMode) {
+                                    reorderMode = !reorderMode
                                 }
                             }
-                            if (playlist.songs.isNotEmpty()) {
-                                Button(
-                                    onClick = {
-                                        appModel.playPlaylist(playlist, startIndex = 0)
-                                    },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = NothingColors.AccentRed,
-                                        contentColor = Color.White
-                                    ),
-                                    shape = RoundedCornerShape(10.dp),
-                                    contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp)
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(
-                                            Icons.Default.PlayArrow,
-                                            contentDescription = null,
-                                            tint = Color.White,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = "Reproducir todo",
-                                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
-                                        )
-                                    }
-                                }
+                            if (playlist.sourceType == PlaylistSourceType.LOCAL && isInLibrary && playlist.songs.isNotEmpty()) {
+                                HeaderIcon(Icons.Default.AutoAwesome, "Modificar con IA", tint = NothingColors.AccentRed) { appModel.openAiModify(playlist.id) }
                             }
-
-                            if (playlist.sourceType == PlaylistSourceType.YOUTUBE_MUSIC && isInLibrary) {
-                                OutlinedButton(
-                                    onClick = {
-                                        isRefreshing = true
-                                        appModel.refreshYouTubePlaylist(playlist) {
-                                            isRefreshing = false
-                                        }
-                                    },
-                                    enabled = !isRefreshing,
-                                    colors = ButtonDefaults.outlinedButtonColors(
-                                        contentColor = Color.White
-                                    ),
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, NothingColors.SurfaceBorder),
-                                    shape = RoundedCornerShape(10.dp),
-                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        if (isRefreshing) {
-                                            CircularProgressIndicator(
-                                                modifier = Modifier.size(14.dp),
-                                                color = NothingColors.AccentRed,
-                                                strokeWidth = 2.dp
-                                            )
-                                        } else {
-                                            Icon(
-                                                Icons.Default.Sync,
-                                                contentDescription = null,
-                                                tint = Color.White,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                        }
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = if (isRefreshing) "Sincronizando..." else "Sincronizar pistas",
-                                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
-                                        )
-                                    }
-                                }
-                            }
-
-                            if (playlist.songs.isNotEmpty()) {
-                                if (isPlaylistDownloading) {
-                                    OutlinedButton(
-                                        onClick = { appModel.cancelPlaylistDownload(playlist.id) },
-                                        colors = ButtonDefaults.outlinedButtonColors(
-                                            contentColor = NothingColors.AccentRed
-                                        ),
-                                        border = androidx.compose.foundation.BorderStroke(1.dp, NothingColors.AccentRed.copy(alpha = 0.7f)),
-                                        shape = RoundedCornerShape(10.dp),
-                                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
-                                    ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            CircularProgressIndicator(
-                                                modifier = Modifier.size(14.dp),
-                                                color = NothingColors.AccentRed,
-                                                strokeWidth = 2.dp
-                                            )
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text(
-                                                text = "Descargando ($downloadedCount/${playlist.songs.size})...",
-                                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
-                                            )
-                                        }
-                                    }
-                                } else if (isFullyDownloaded) {
-                                    OutlinedButton(
-                                        onClick = { /* Completa */ },
-                                        colors = ButtonDefaults.outlinedButtonColors(
-                                            contentColor = Color(0xFF4CAF50)
-                                        ),
-                                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF4CAF50).copy(alpha = 0.6f)),
-                                        shape = RoundedCornerShape(10.dp),
-                                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
-                                    ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(
-                                                Icons.Default.DownloadDone,
-                                                contentDescription = null,
-                                                tint = Color(0xFF4CAF50),
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text(
-                                                text = "Descargada (${playlist.songs.size})",
-                                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
-                                            )
-                                        }
-                                    }
-                                } else {
-                                    OutlinedButton(
-                                        onClick = { appModel.downloadPlaylist(playlist) },
-                                        colors = ButtonDefaults.outlinedButtonColors(
-                                            contentColor = Color.White
-                                        ),
-                                        border = androidx.compose.foundation.BorderStroke(1.dp, NothingColors.SurfaceBorder),
-                                        shape = RoundedCornerShape(10.dp),
-                                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
-                                    ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(
-                                                Icons.Default.Download,
-                                                contentDescription = null,
-                                                tint = Color.White,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text(
-                                                text = if (downloadedCount > 0) "Descargar restantes (${playlist.songs.size - downloadedCount})" else "Descargar playlist",
-                                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-
-                            if (!isInLibrary) {
-                                Button(
-                                    onClick = { appModel.savePlaylistToLibrary(playlist) },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = NothingColors.SurfaceBorder,
-                                        contentColor = Color.White
-                                    ),
-                                    shape = RoundedCornerShape(10.dp),
-                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Default.LibraryAdd,
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Guardar en biblioteca", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium))
-                                }
-                            } else OutlinedButton(
-                                onClick = {
-                                    appModel.deletePlaylist(playlist.id)
-                                    onClose()
-                                },
-                                colors = ButtonDefaults.outlinedButtonColors(
-                                    contentColor = NothingColors.AccentRed
-                                ),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, NothingColors.AccentRed.copy(alpha = 0.5f)),
-                                shape = RoundedCornerShape(10.dp),
-                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        Icons.Default.Delete,
-                                        contentDescription = null,
-                                        tint = NothingColors.AccentRed,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = "Eliminar",
-                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
-                                    )
-                                }
+                            if (isInLibrary) {
+                                HeaderIcon(
+                                    Icons.Default.Delete,
+                                    if (playlist.sourceType == PlaylistSourceType.YOUTUBE_MUSIC) "Quitar de tu biblioteca" else "Eliminar playlist"
+                                ) { confirmDelete = true }
                             }
                         }
                     }
@@ -486,221 +327,22 @@ fun PlaylistDetailModal(
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
-                        itemsIndexed(playlist.songs) { index, song ->
+                        itemsIndexed(playlist.songs, key = { i, song -> "${song.id}#$i" }) { index, song ->
                             val isCurrent = currentSong?.id == song.id
                             val isPlaying = isCurrent && playbackState.isPlaying
-                            val isFav = appModel.isFavorite(song.id)
-
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(
-                                        if (isCurrent) NothingColors.SurfaceElevated else NothingColors.Surface
-                                    )
-                                    .border(
-                                        width = 1.dp,
-                                        color = if (isCurrent) NothingColors.AccentRed.copy(alpha = 0.5f) else Color.Transparent,
-                                        shape = RoundedCornerShape(12.dp)
-                                    )
-                                    .clickable {
-                                        appModel.playPlaylist(playlist, startIndex = index)
-                                    }
-                                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                // Monospace index
-                                Text(
-                                    text = String.format("%02d", index + 1),
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        fontFamily = FontFamily.Monospace,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (isCurrent) NothingColors.AccentRed else NothingColors.TextMuted,
-                                        fontSize = 12.sp
-                                    ),
-                                    modifier = Modifier.width(28.dp)
-                                )
-
-                                Spacer(modifier = Modifier.width(8.dp))
-
-                                // Thumbnail
-                                Box(
-                                    modifier = Modifier
-                                        .size(42.dp)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(NothingColors.SurfaceElevated),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    if (!song.thumbnail.isNullOrBlank()) {
-                                        AsyncImage(
-                                            model = song.thumbnail,
-                                            contentDescription = song.title,
-                                            modifier = Modifier.fillMaxSize(),
-                                            contentScale = ContentScale.Crop
-                                        )
-                                    } else {
-                                        Icon(
-                                            Icons.Default.MusicNote,
-                                            contentDescription = null,
-                                            tint = NothingColors.TextMuted,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.width(14.dp))
-
-                                // Song details
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = song.title,
-                                        style = MaterialTheme.typography.bodyMedium.copy(
-                                            fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
-                                            color = if (isCurrent) NothingColors.AccentRed else NothingColors.TextPrimary
-                                        ),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Text(
-                                        text = song.artists.joinToString(", ") { it.name }.ifEmpty { "Desconocido" },
-                                        style = MaterialTheme.typography.bodySmall.copy(
-                                            color = NothingColors.TextSecondary
-                                        ),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-
-                                // Duration
-                                val dur = song.duration ?: 0
-                                if (dur > 0) {
-                                    val minutes = dur / 60
-                                    val seconds = dur % 60
-                                    Text(
-                                        text = String.format("%d:%02d", minutes, seconds),
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            fontFamily = FontFamily.Monospace,
-                                            color = NothingColors.TextMuted,
-                                            fontSize = 12.sp
-                                        ),
-                                        modifier = Modifier.padding(horizontal = 12.dp)
-                                    )
-                                }
-
-                                // Reorder arrows
-                                if (reorderMode) {
-                                    IconButton(
-                                        onClick = { appModel.moveSongInPlaylist(playlist.id, index, index - 1) },
-                                        enabled = index > 0,
-                                        modifier = Modifier.size(32.dp)
-                                    ) {
-                                        Icon(Icons.Default.KeyboardArrowUp, "Subir", tint = if (index > 0) NothingColors.TextPrimary else NothingColors.SurfaceBorder, modifier = Modifier.size(20.dp))
-                                    }
-                                    IconButton(
-                                        onClick = { appModel.moveSongInPlaylist(playlist.id, index, index + 1) },
-                                        enabled = index < playlist.songs.lastIndex,
-                                        modifier = Modifier.size(32.dp)
-                                    ) {
-                                        Icon(Icons.Default.KeyboardArrowDown, "Bajar", tint = if (index < playlist.songs.lastIndex) NothingColors.TextPrimary else NothingColors.SurfaceBorder, modifier = Modifier.size(20.dp))
-                                    }
-                                }
-
-                                // Add to another playlist
-                                IconButton(
-                                    onClick = { appModel.openAddToPlaylist(listOf(song)) },
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Icon(
-                                        Icons.AutoMirrored.Filled.PlaylistAdd,
-                                        contentDescription = "Agregar a otra playlist",
-                                        tint = NothingColors.TextMuted,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-
-                                // Remove from this playlist (also from your YouTube Music playlists / "Me gusta")
-                                if (canRemove) {
-                                    IconButton(
-                                        onClick = { appModel.removeSongFromPlaylist(playlist.id, song.id) },
-                                        modifier = Modifier.size(32.dp)
-                                    ) {
-                                        Icon(
-                                            Icons.Default.RemoveCircleOutline,
-                                            contentDescription = "Quitar de esta playlist",
-                                            tint = NothingColors.TextMuted,
-                                            modifier = Modifier.size(17.dp)
-                                        )
-                                    }
-                                }
-
-                                // Download Action
-                                val isSongDownloaded = appModel.isDownloaded(song.id)
-                                val songProg = downloadProgressMap[song.id]
-
-                                if (songProg != null) {
-                                    Box(
-                                        modifier = Modifier.size(32.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        CircularProgressIndicator(
-                                            progress = { songProg },
-                                            modifier = Modifier.size(16.dp),
-                                            color = NothingColors.AccentRed,
-                                            trackColor = NothingColors.SurfaceBorder,
-                                            strokeWidth = 2.dp
-                                        )
-                                    }
-                                } else {
-                                    IconButton(
-                                        onClick = {
-                                            if (isSongDownloaded) {
-                                                appModel.deleteDownload(song.id)
-                                            } else {
-                                                appModel.downloadSong(song)
-                                            }
-                                        },
-                                        modifier = Modifier.size(32.dp)
-                                    ) {
-                                        Icon(
-                                            if (isSongDownloaded) Icons.Default.DownloadDone else Icons.Default.Download,
-                                            contentDescription = if (isSongDownloaded) "Descargada (sin conexión)" else "Descargar pista",
-                                            tint = if (isSongDownloaded) Color(0xFF4CAF50) else NothingColors.TextMuted,
-                                            modifier = Modifier.size(17.dp)
-                                        )
-                                    }
-                                }
-
-                                // Favorite
-                                IconButton(
-                                    onClick = { appModel.toggleFavorite(song) },
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Icon(
-                                        if (isFav) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                        contentDescription = "Favorito",
-                                        tint = if (isFav) NothingColors.AccentRed else NothingColors.TextMuted,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-
-                                // More: radio, "No me gusta", block artist
-                                SongMoreMenuButton(song = song, appModel = appModel)
-
-                                // Play icon
-                                IconButton(
-                                    onClick = { appModel.playPlaylist(playlist, startIndex = index) },
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Icon(
-                                        if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                        contentDescription = "Reproducir",
-                                        tint = if (isCurrent) NothingColors.AccentRed else NothingColors.TextPrimary,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                            }
+                            PlaylistSongRow(
+                                appModel = appModel,
+                                playlist = playlist,
+                                song = song,
+                                index = index,
+                                isCurrent = isCurrent,
+                                isPlaying = isPlaying,
+                                reorderMode = reorderMode,
+                                canRemove = canRemove,
+                                downloadProgress = downloadProgressMap[song.id]
+                            )
                         }
 
                         item {
@@ -750,4 +392,168 @@ private fun RenamePlaylistDialog(
             TextButton(onClick = onDismiss) { Text("Cancelar", color = NothingColors.TextSecondary) }
         }
     )
+}
+
+/** Small round icon button for the playlist header; its name shows on hover. */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+private fun HeaderIcon(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    tint: Color = NothingColors.TextSecondary,
+    active: Boolean = false,
+    loading: Boolean = false,
+    onClick: () -> Unit
+) {
+    androidx.compose.foundation.TooltipArea(
+        tooltip = {
+            Text(
+                label,
+                color = NothingColors.TextPrimary,
+                style = MaterialTheme.typography.labelMedium,
+                modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(NothingColors.Surface)
+                    .border(1.dp, NothingColors.SurfaceBorder, RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 6.dp)
+            )
+        },
+        delayMillis = 250
+    ) {
+        Box(
+            Modifier
+                .size(38.dp)
+                .clip(CircleShape)
+                .background(if (active) NothingColors.AccentRed.copy(alpha = 0.15f) else NothingColors.SurfaceElevated)
+                .border(1.dp, if (active) NothingColors.AccentRed.copy(alpha = 0.6f) else NothingColors.SurfaceBorder, CircleShape)
+                .clickable(onClick = onClick),
+            contentAlignment = Alignment.Center
+        ) {
+            if (loading) CircularProgressIndicator(modifier = Modifier.size(16.dp), color = NothingColors.AccentRed, strokeWidth = 2.dp)
+            else Icon(icon, contentDescription = label, tint = if (active) NothingColors.AccentRed else tint, modifier = Modifier.size(18.dp))
+        }
+    }
+}
+
+/**
+ * One song of the playlist: the row itself plays it. Its tools (add, download, remove, more) show
+ * only on hover or for the song playing, so the list stays clean; liked and downloaded marks stay.
+ */
+@Composable
+private fun PlaylistSongRow(
+    appModel: DesktopAppModel,
+    playlist: UserPlaylist,
+    song: SongItem,
+    index: Int,
+    isCurrent: Boolean,
+    isPlaying: Boolean,
+    reorderMode: Boolean,
+    canRemove: Boolean,
+    downloadProgress: Float?
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val hovered by interaction.collectIsHoveredAsState()
+    val showTools = hovered || isCurrent
+    val isFav = appModel.isFavorite(song.id)
+    val isDownloaded = appModel.isDownloaded(song.id)
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(
+                when {
+                    isCurrent -> NothingColors.Surface
+                    hovered -> NothingColors.Surface.copy(alpha = 0.7f)
+                    else -> Color.Transparent
+                }
+            )
+            .border(1.dp, if (isCurrent) NothingColors.AccentRed.copy(alpha = 0.45f) else Color.Transparent, RoundedCornerShape(12.dp))
+            .hoverable(interaction)
+            .clickable { appModel.playPlaylist(playlist, startIndex = index) }
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Number, or play/pause while hovering / playing
+        Box(Modifier.width(30.dp), contentAlignment = Alignment.Center) {
+            when {
+                isPlaying -> Icon(Icons.Default.GraphicEq, contentDescription = "Sonando", tint = NothingColors.AccentRed, modifier = Modifier.size(18.dp))
+                hovered || isCurrent -> Icon(Icons.Default.PlayArrow, contentDescription = "Reproducir", tint = NothingColors.TextPrimary, modifier = Modifier.size(20.dp))
+                else -> Text(
+                    "${index + 1}",
+                    style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, color = NothingColors.TextMuted, fontSize = 12.sp)
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        Box(
+            modifier = Modifier.size(42.dp).clip(RoundedCornerShape(8.dp)).background(NothingColors.SurfaceElevated),
+            contentAlignment = Alignment.Center
+        ) {
+            if (song.thumbnail.isNotBlank()) {
+                AsyncImage(model = song.thumbnail, contentDescription = song.title, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            } else {
+                Icon(Icons.Default.MusicNote, contentDescription = null, tint = NothingColors.TextMuted, modifier = Modifier.size(20.dp))
+            }
+        }
+        Spacer(modifier = Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                song.title,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
+                    color = if (isCurrent) NothingColors.AccentRed else NothingColors.TextPrimary
+                ),
+                maxLines = 1, overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                song.artists.joinToString(", ") { it.name }.ifEmpty { "Desconocido" },
+                style = MaterialTheme.typography.bodySmall.copy(color = NothingColors.TextSecondary),
+                maxLines = 1, overflow = TextOverflow.Ellipsis
+            )
+        }
+
+        if (reorderMode) {
+            IconButton(onClick = { appModel.moveSongInPlaylist(playlist.id, index, index - 1) }, enabled = index > 0, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.Default.KeyboardArrowUp, "Subir", tint = if (index > 0) NothingColors.TextPrimary else NothingColors.SurfaceBorder, modifier = Modifier.size(20.dp))
+            }
+            IconButton(onClick = { appModel.moveSongInPlaylist(playlist.id, index, index + 1) }, enabled = index < playlist.songs.lastIndex, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.Default.KeyboardArrowDown, "Bajar", tint = if (index < playlist.songs.lastIndex) NothingColors.TextPrimary else NothingColors.SurfaceBorder, modifier = Modifier.size(20.dp))
+            }
+        } else if (showTools) {
+            RowIcon(Icons.AutoMirrored.Filled.PlaylistAdd, "Agregar a otra playlist") { appModel.openAddToPlaylist(listOf(song)) }
+            when {
+                downloadProgress != null -> Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(progress = { downloadProgress }, modifier = Modifier.size(16.dp), color = NothingColors.AccentRed, trackColor = NothingColors.SurfaceBorder, strokeWidth = 2.dp)
+                }
+                isDownloaded -> RowIcon(Icons.Default.DownloadDone, "Borrar la descarga", tint = Color(0xFF4CAF50)) { appModel.deleteDownload(song.id) }
+                else -> RowIcon(Icons.Default.Download, "Descargar") { appModel.downloadSong(song) }
+            }
+            if (canRemove) RowIcon(Icons.Default.RemoveCircleOutline, "Quitar de esta playlist") { appModel.removeSongFromPlaylist(playlist.id, song.id) }
+        } else if (isDownloaded) {
+            Icon(Icons.Default.DownloadDone, contentDescription = "Descargada", tint = Color(0xFF4CAF50), modifier = Modifier.padding(horizontal = 7.dp).size(16.dp))
+        }
+
+        // Liked: always visible when it is; on hover to add it
+        if (isFav || showTools) {
+            RowIcon(if (isFav) Icons.Default.Favorite else Icons.Default.FavoriteBorder, "Favorito", tint = if (isFav) NothingColors.AccentRed else NothingColors.TextMuted) {
+                appModel.toggleFavorite(song)
+            }
+        } else {
+            Spacer(Modifier.width(32.dp))
+        }
+
+        val dur = song.duration ?: 0
+        Text(
+            if (dur > 0) String.format("%d:%02d", dur / 60, dur % 60) else "",
+            style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, color = NothingColors.TextMuted, fontSize = 12.sp),
+            textAlign = androidx.compose.ui.text.style.TextAlign.End,
+            modifier = Modifier.width(48.dp)
+        )
+        if (showTools) SongMoreMenuButton(song = song, appModel = appModel) else Spacer(Modifier.width(32.dp))
+    }
+}
+
+@Composable
+private fun RowIcon(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, tint: Color = NothingColors.TextMuted, onClick: () -> Unit) {
+    IconButton(onClick = onClick, modifier = Modifier.size(32.dp)) {
+        Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(17.dp))
+    }
 }
