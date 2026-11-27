@@ -151,6 +151,38 @@ fun LibraryScreen(
             // Right Actions
             if (selectedSubTab == LibrarySubTab.PLAYLISTS) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    // AI playlists (with the user's own AI key)
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(NothingColors.SurfaceElevated)
+                            .border(1.dp, NothingColors.AccentRed.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                            .clickable { appModel.openAiCreate() }
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = NothingColors.AccentRed, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Crear con IA",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = Color.White, fontSize = 12.sp)
+                            )
+                        }
+                    }
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(NothingColors.SurfaceElevated)
+                            .border(1.dp, NothingColors.AccentRed.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                            .clickable { appModel.createTastePlaylist() }
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                    ) {
+                        Text(
+                            text = "De tus gustos",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = Color.White, fontSize = 12.sp)
+                        )
+                    }
+
                     // New local playlist
                     Box(
                         modifier = Modifier

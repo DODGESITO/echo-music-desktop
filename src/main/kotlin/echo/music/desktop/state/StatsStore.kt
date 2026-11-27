@@ -105,6 +105,11 @@ object StatsStore {
         }
     }
 
+    /** Songs played on this PC, most recent first (works even with the history paused or cleared). */
+    @Synchronized
+    fun recentSongs(limit: Int = 50): List<SongItem> =
+        currentData.songCache.values.sortedByDescending { it.timestamp }.take(limit).map { it.toSongItem() }
+
     @Synchronized
     fun recordPlayback(song: SongItem, durationSeconds: Int) {
         val playedSec = durationSeconds.coerceAtLeast(1)

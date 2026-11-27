@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.Waves
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -265,6 +266,8 @@ fun PlaybackAndContentSettings(appModel: DesktopAppModel) {
             onChange = { v -> appModel.updatePreferences { it.copy(lyricsAutoTranslate = v) } }
         )
     }
+
+    MusicFlowSettings(appModel)
 
     PrivacySettings(appModel)
 
@@ -851,6 +854,40 @@ fun UpdateSettings(appModel: DesktopAppModel) {
         Text(
             "Solo funciona con un repositorio público, o con versiones publicadas en uno público.",
             style = MaterialTheme.typography.labelSmall.copy(color = NothingColors.TextMuted)
+        )
+    }
+}
+
+@Composable
+private fun MusicFlowSettings(appModel: DesktopAppModel) {
+    val prefs by appModel.prefs.collectAsState()
+    SettingsCard(title = "MUSIC FLOW", icon = Icons.Default.Waves) {
+        ToggleRow(
+            title = "Reproducción automática",
+            description = "Empieza a reproducir en cuanto se muestra una canción.",
+            checked = prefs.flowAutoplay,
+            onChange = { v -> appModel.updatePreferences { it.copy(flowAutoplay = v) } }
+        )
+        Spacer(Modifier.height(10.dp))
+        ToggleRow(
+            title = "Avance automático",
+            description = "Pasa a la siguiente canción cuando termina una.",
+            checked = prefs.flowAutoNext,
+            onChange = { v -> appModel.updatePreferences { it.copy(flowAutoNext = v) } }
+        )
+        Spacer(Modifier.height(10.dp))
+        ToggleRow(
+            title = "Vista previa de la letra",
+            description = "Muestra la línea actual de la letra en cada canción.",
+            checked = prefs.flowLyrics,
+            onChange = { v -> appModel.updatePreferences { it.copy(flowLyrics = v) } }
+        )
+        Spacer(Modifier.height(10.dp))
+        ToggleRow(
+            title = "Ocultar reproducidas recientemente",
+            description = "Omite las canciones que has escuchado hace poco.",
+            checked = prefs.flowHideRecent,
+            onChange = { v -> appModel.updatePreferences { it.copy(flowHideRecent = v) } }
         )
     }
 }

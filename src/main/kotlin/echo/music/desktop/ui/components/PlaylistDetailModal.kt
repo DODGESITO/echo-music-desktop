@@ -244,6 +244,19 @@ fun PlaylistDetailModal(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
+                            if (playlist.sourceType == PlaylistSourceType.LOCAL && isInLibrary && playlist.songs.isNotEmpty()) {
+                                OutlinedButton(
+                                    onClick = { appModel.openAiModify(playlist.id) },
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, NothingColors.AccentRed.copy(alpha = 0.5f)),
+                                    shape = RoundedCornerShape(10.dp),
+                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+                                ) {
+                                    Icon(Icons.Default.AutoAwesome, null, tint = NothingColors.AccentRed, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Modificar con IA")
+                                }
+                            }
                             if (canEdit && playlist.songs.size > 1) {
                                 OutlinedButton(
                                     onClick = { reorderMode = !reorderMode },

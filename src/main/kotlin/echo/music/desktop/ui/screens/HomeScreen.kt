@@ -12,6 +12,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Waves
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -106,6 +109,9 @@ fun HomeScreen(
                 }
             }
         }
+
+        // Smart recommendations
+        item { DiscoverRow(appModel) }
 
         // Recently Played Section (if any)
         if (history.isNotEmpty()) {
@@ -324,6 +330,62 @@ fun HomeScreen(
 
         item {
             Spacer(modifier = Modifier.height(20.dp))
+        }
+    }
+}
+
+/** Music Flow and the AI playlists, right below the welcome card. */
+@Composable
+private fun DiscoverRow(appModel: DesktopAppModel) {
+    Row(horizontalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.fillMaxWidth()) {
+        DiscoverCard(
+            icon = androidx.compose.material.icons.Icons.Default.Waves,
+            title = "Music Flow",
+            subtitle = "Desliza para descubrir: radios hechas con lo que escuchas",
+            modifier = Modifier.weight(1f)
+        ) { appModel.openMusicFlow() }
+        DiscoverCard(
+            icon = androidx.compose.material.icons.Icons.Default.AutoAwesome,
+            title = "De tus gustos",
+            subtitle = "La IA arma una playlist con lo que más escuchas",
+            modifier = Modifier.weight(1f)
+        ) { appModel.createTastePlaylist() }
+        DiscoverCard(
+            icon = androidx.compose.material.icons.Icons.Default.Edit,
+            title = "Crear con IA",
+            subtitle = "Describe un momento o un estilo y la IA elige",
+            modifier = Modifier.weight(1f)
+        ) { appModel.openAiCreate() }
+    }
+}
+
+@Composable
+private fun DiscoverCard(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String,
+    modifier: Modifier,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(NothingColors.Surface)
+            .border(1.dp, NothingColors.SurfaceBorder, RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick)
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            Modifier.size(42.dp).clip(CircleShape).background(NothingColors.AccentRed.copy(alpha = 0.15f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(icon, null, tint = NothingColors.AccentRed, modifier = Modifier.size(22.dp))
+        }
+        Spacer(Modifier.width(12.dp))
+        Column {
+            Text(title, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold, color = NothingColors.TextPrimary))
+            Text(subtitle, maxLines = 2, style = MaterialTheme.typography.bodySmall.copy(color = NothingColors.TextSecondary))
         }
     }
 }

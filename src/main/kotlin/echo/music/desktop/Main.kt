@@ -435,7 +435,8 @@ fun main(args: Array<String>) = if (installPendingUpdate()) Unit else applicatio
                             isListenTogetherInRoom = appModel.listenTogetherManager.isInRoom,
                             listenTogetherRoomCode = listenTogetherRoomState?.roomCode,
                             onOpenListenTogetherModal = { appModel.openListenTogetherModal() },
-                            onOpenEchoFind = { appModel.openEchoFind() }
+                            onOpenEchoFind = { appModel.openEchoFind() },
+                            onOpenMusicFlow = { appModel.openMusicFlow() }
                         )
 
                         // Center / Right: Screen Switching with Crossfade
@@ -621,6 +622,20 @@ fun main(args: Array<String>) = if (installPendingUpdate()) Unit else applicatio
                             onClose = { appModel.closeEqualizerModal() }
                         )
                     }
+
+                    // Music Flow (full window)
+                    val isMusicFlowOpen by appModel.isMusicFlowOpen.collectAsState()
+                    AnimatedVisibility(
+                        visible = isMusicFlowOpen,
+                        enter = fadeIn(tween(250)),
+                        exit = fadeOut(tween(200))
+                    ) {
+                        echo.music.desktop.ui.screens.MusicFlowScreen(appModel)
+                    }
+
+                    // Playlists con IA
+                    echo.music.desktop.ui.components.AiPromptDialog(appModel)
+                    echo.music.desktop.ui.components.AiTaskDialog(appModel)
 
                     // Echo Wrapped / Stats Modal
                     if (isStatsModalOpen) {

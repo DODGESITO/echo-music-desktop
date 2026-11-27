@@ -85,6 +85,15 @@ data class DesktopPreferences(
     val islandHideFullscreen: Boolean = true,
     /** Show the clock pill even when nothing is playing. */
     val islandShowIdle: Boolean = true,
+    // --- Music Flow ---
+    /** Play each song as soon as it is shown. */
+    val flowAutoplay: Boolean = true,
+    /** Go on to the next song of the Flow when one ends. */
+    val flowAutoNext: Boolean = true,
+    /** Show the current lyric line on each song. */
+    val flowLyrics: Boolean = true,
+    /** Leave out what you heard recently. */
+    val flowHideRecent: Boolean = true,
     // --- Audífonos ---
     /** Pause when Bluetooth or wired headphones disconnect (so music does not jump to the speakers). */
     val pauseOnHeadphonesDisconnect: Boolean = true,

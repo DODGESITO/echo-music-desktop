@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Waves
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Headphones
@@ -49,6 +50,7 @@ fun Sidebar(
     listenTogetherRoomCode: String? = null,
     onOpenListenTogetherModal: () -> Unit = {},
     onOpenEchoFind: () -> Unit = {},
+    onOpenMusicFlow: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -343,6 +345,37 @@ fun Sidebar(
                         )
                     )
                 }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Music Flow (swipe to discover)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(NothingColors.SurfaceElevated)
+                .border(1.dp, NothingColors.AccentRed.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
+                .clickable(onClick = onOpenMusicFlow)
+                .padding(horizontal = 14.dp, vertical = 9.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.Waves,
+                    contentDescription = "Music Flow",
+                    tint = NothingColors.AccentRed,
+                    modifier = Modifier.size(17.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Music Flow",
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = NothingColors.TextPrimary,
+                        fontSize = 13.sp
+                    )
+                )
             }
         }
 

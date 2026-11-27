@@ -1594,6 +1594,9 @@ class DesktopAppModel(
             return
         }
 
+        // Music Flow with "Avance automático" off: stop at the end of each song.
+        if (flowOwnsQueue() && !_prefs.value.flowAutoNext) return
+
         val q = _queue.value
         if (q.isEmpty()) return
         when (_repeatMode.value) {
@@ -1771,6 +1774,14 @@ class DesktopAppModel(
     }
 
     fun closeActiveModal(): Boolean {
+        if (_aiPrompt.value != null) {
+            _aiPrompt.value = null
+            return true
+        }
+        if (_aiTask.value?.running == false) {
+            _aiTask.value = null
+            return true
+        }
         if (_addToPlaylistSongs.value != null) {
             _addToPlaylistSongs.value = null
             return true
@@ -1793,6 +1804,10 @@ class DesktopAppModel(
         }
         if (_isStatsModalOpen.value) {
             _isStatsModalOpen.value = false
+            return true
+        }
+        if (_isMusicFlowOpen.value) {
+            _isMusicFlowOpen.value = false
             return true
         }
         if (_selectedPlaylistDetail.value != null) {
@@ -2520,6 +2535,227 @@ class DesktopAppModel(
     }
 
     // Runs after every property above is initialized (init blocks run in declaration order).
+    // --- Music Flow (descubrir deslizando) ---
+    private val flowSession = echo.music.desktop.recommend.FlowSession(
+        echo.music.desktop.recommend.YouTubeFlowSource(
+            echo.music.desktop.recommend.FlowInputs(
+                history = { flowHistory() },
+                liked = { flowLiked() },
+                quickPicks = { _homeSongs.value },
+                downloaded = { _downloadedSongs.value.map { it.toSongItem() } },
+                hideRecent = { _prefs.value.flowHideRecent },
+                contentFilter = { it.applyContentFilters() },
+                neverRecommend = { ContentBlockStore.current.songs.map { echo.music.desktop.recommend.trackKeyOf(it.title, it.artist) }.toSet() }
+            )
+        )
+    )
+    val musicFlow: StateFlow<echo.music.desktop.recommend.FlowState> = flowSession.state
+
+    /** What you listened to: the history, or Echo Wrapped's plays when it is paused or empty. */
+    private fun flowHistory(): List<SongItem> = _history.value.ifEmpty { StatsStore.recentSongs() }
+
+    /** What you like: favorites plus the songs of your library playlists (YouTube "Me gusta" first). */
+    private fun flowLiked(): List<SongItem> {
+        val playlists = _userPlaylists.value.sortedByDescending { it.id == "yt_LM" }
+        return (_favorites.value + playlists.flatMap { it.songs }).distinctBy { it.id }
+    }
+    private val _isMusicFlowOpen = MutableStateFlow(false)
+    val isMusicFlowOpen: StateFlow<Boolean> = _isMusicFlowOpen.asStateFlow()
+
+    /** Song ids of the queue Music Flow put in place (it only extends its own queue). */
+    private var flowQueueIds: List<String>? = null
+    /** What was playing before Music Flow took over, to give it back. */
+    private var queueBeforeFlow: Triple<List<SongItem>, Int, Long>? = null
+    private val _canRestoreQueue = MutableStateFlow(false)
+    val canRestoreQueue: StateFlow<Boolean> = _canRestoreQueue.asStateFlow()
+
+    private fun flowOwnsQueue(): Boolean = flowQueueIds?.let { ids -> _queue.value.map { it.id } == ids } == true
+
+    fun openMusicFlow() {
+        _isMusicFlowOpen.value = true
+        scope.launch {
+            flowSession.start(_currentSong.value?.let { echo.music.desktop.recommend.FlowItem(it, echo.music.desktop.recommend.FlowSource.NOW_PLAYING) })
+            if (flowOwnsQueue()) flowSession.indexOf(_currentSong.value?.id).takeIf { it >= 0 }?.let(flowSession::select)
+        }
+    }
+
+    fun closeMusicFlow() {
+        _isMusicFlowOpen.value = false
+    }
+
+    /** "Empezar un nuevo Flow". */
+    fun restartMusicFlow() {
+        scope.launch { flowSession.reset(_currentSong.value?.let { echo.music.desktop.recommend.FlowItem(it, echo.music.desktop.recommend.FlowSource.NOW_PLAYING) }) }
+    }
+
+    fun retryMusicFlow() = restartMusicFlow()
+
+    /** A page of the Flow became the visible one. */
+    fun selectFlowPage(index: Int, play: Boolean = _prefs.value.flowAutoplay) {
+        flowSession.select(index)
+        val items = flowSession.state.value.items
+        val item = items.getOrNull(index) ?: return
+        if (items.size - index <= echo.music.desktop.recommend.FlowSession.PREFETCH_THRESHOLD) extendFlow()
+        if (!play || _currentSong.value?.id == item.songId) return
+        if (flowOwnsQueue()) {
+            _queue.value.firstOrNull { it.id == item.songId }?.let { playSong(it, _queue.value) }
+            return
+        }
+        // Music Flow takes the queue over: keep what was there to give it back later.
+        if (queueBeforeFlow == null && _queue.value.isNotEmpty()) {
+            queueBeforeFlow = Triple(_queue.value, _currentIndex.value, playbackState.value.currentPositionMs)
+        }
+        val queue = items.map { it.song }
+        flowQueueIds = queue.map { it.id }
+        _canRestoreQueue.value = queueBeforeFlow != null
+        playSong(item.song, queue)
+    }
+
+    /** Plays/pauses the visible song (starting it if another one is playing). */
+    fun toggleFlowPlayback(index: Int) {
+        val item = flowSession.state.value.items.getOrNull(index) ?: return
+        if (_currentSong.value?.id == item.songId) togglePlayPause() else selectFlowPage(index, play = true)
+    }
+
+    private var flowExtendJob: kotlinx.coroutines.Job? = null
+
+    /** Loads more songs and, if the Flow is playing, adds them to its queue. */
+    private fun extendFlow() {
+        if (flowExtendJob?.isActive == true) return
+        flowExtendJob = scope.launch {
+            val added = flowSession.loadMore()
+            if (added.isNotEmpty() && flowOwnsQueue()) {
+                val known = _queue.value.map { it.id }.toSet()
+                _queue.value = _queue.value + added.map { it.song }.filterNot { it.id in known }
+                flowQueueIds = _queue.value.map { it.id }
+            }
+        }
+    }
+
+    /** Keeps the Flow on the song that is playing, and its queue topped up. */
+    private fun startFlowFollower() = scope.launch {
+        currentSong.collect { song ->
+            if (song == null || !flowOwnsQueue()) return@collect
+            val index = flowSession.indexOf(song.id)
+            if (index >= 0) flowSession.select(index)
+            if (_queue.value.size - _currentIndex.value - 1 <= echo.music.desktop.recommend.FlowSession.PREFETCH_THRESHOLD) extendFlow()
+        }
+    }
+
+    /** "Restaurar la cola anterior": what was playing before Music Flow, where it was left. */
+    fun restoreQueueBeforeFlow() {
+        val (queue, index, position) = queueBeforeFlow ?: return
+        queueBeforeFlow = null
+        flowQueueIds = null
+        _canRestoreQueue.value = false
+        val song = queue.getOrNull(index) ?: return
+        pendingResume = song.id to position
+        playSong(song, queue)
+        _statusMessage.value = "Cola anterior restaurada"
+    }
+
+    /** "No me interesa": out of this Flow (and skipped if it is the one playing). */
+    fun flowNotInterested(item: echo.music.desktop.recommend.FlowItem) {
+        flowSession.hide(item.songId)
+        skipFlowItemIfCurrent(item)
+        _statusMessage.value = "Gracias, Flow se ajustará"
+    }
+
+    /** "Menos como esto": that artist goes to the back of what comes next. */
+    fun flowLessLikeThis(item: echo.music.desktop.recommend.FlowItem) {
+        flowSession.lessLikeThis(item)
+        _statusMessage.value = "Gracias, Flow se ajustará"
+    }
+
+    /** "No recomendar nunca más": a "No me gusta" for good (also out of radios and Inicio). */
+    fun flowNeverRecommend(item: echo.music.desktop.recommend.FlowItem) {
+        flowSession.hide(item.songId)
+        val wasCurrent = _currentSong.value?.id == item.songId
+        dislikeSong(item.song) // already skips it if it is playing
+        if (!wasCurrent) _statusMessage.value = "No volverás a ver \"${item.song.title}\""
+    }
+
+    private fun skipFlowItemIfCurrent(item: echo.music.desktop.recommend.FlowItem) {
+        if (_currentSong.value?.id != item.songId) return
+        val items = flowSession.state.value.items
+        val next = (flowSession.indexOf(item.songId) + 1).takeIf { it in items.indices } ?: return
+        selectFlowPage(next, play = true)
+    }
+
+    // --- Playlists con IA (con tu propia clave) ---
+    /** Which AI dialog is open: "create", "taste" or "modify:<playlistId>". */
+    private val _aiPrompt = MutableStateFlow<String?>(null)
+    val aiPrompt: StateFlow<String?> = _aiPrompt.asStateFlow()
+    private val _aiTask = MutableStateFlow<AiTask?>(null)
+    val aiTask: StateFlow<AiTask?> = _aiTask.asStateFlow()
+
+    private fun aiAccount() = _prefs.value.let { p ->
+        echo.music.desktop.recommend.AiAccount(
+            provider = echo.music.desktop.lyrics.TranslationProvider.from(p.translationProvider),
+            apiKey = translationApiKey(),
+            model = p.translationModel,
+            baseUrl = p.translationBaseUrl
+        )
+    }
+
+    /** Null when AI playlists can be made; otherwise what is missing. */
+    fun aiUnavailableReason(): String? = echo.music.desktop.recommend.AiPlaylists.unsupportedReason(aiAccount())
+
+    fun openAiCreate() { _aiPrompt.value = "create" }
+    fun openAiModify(playlistId: String) { _aiPrompt.value = "modify:$playlistId" }
+    fun closeAiPrompt() { _aiPrompt.value = null }
+    fun dismissAiTask() { if (_aiTask.value?.running != true) _aiTask.value = null }
+
+    private fun runAi(title: String, block: suspend (log: suspend (String) -> Unit) -> String) {
+        if (_aiTask.value?.running == true) return
+        _aiPrompt.value = null
+        _aiTask.value = AiTask(title = title, log = "Preparando…", running = true)
+        scope.launch {
+            val log: suspend (String) -> Unit = { line -> _aiTask.value = _aiTask.value?.copy(log = line) }
+            _aiTask.value = runCatching { block(log) }.fold(
+                onSuccess = { AiTask(title = title, log = it, running = false) },
+                onFailure = { AiTask(title = title, log = "", running = false, error = it.message ?: "Algo salió mal") }
+            )
+        }
+    }
+
+    /** "Crear playlist con IA". */
+    fun createAiPlaylist(prompt: String, count: Int) = runAi("Playlist con IA") { log ->
+        val result = echo.music.desktop.recommend.AiPlaylists.generate(aiAccount(), prompt, count, log).getOrThrow()
+        val playlist = createPlaylist(result.name, result.songs)
+        openPlaylistDetail(playlist)
+        "Lista \"${playlist.title}\" creada con ${result.songs.size} canciones"
+    }
+
+    /** "De tus gustos": recommendations from what you listen to most and like. */
+    fun createTastePlaylist() = runAi("De tus gustos") { log ->
+        val taste = (StatsStore.getSummary().topSongs.map { it.song }.take(20) + flowLiked().shuffled().take(20))
+            .distinctBy { it.id }
+        val songs = echo.music.desktop.recommend.AiPlaylists.fromTaste(aiAccount(), taste, log).getOrThrow()
+        val title = "De tus gustos · Echo Music"
+        val existing = PlaylistStore.getPlaylists().firstOrNull { it.title == title && it.sourceType == PlaylistSourceType.LOCAL }
+        val playlist = if (existing != null) {
+            existing.copy(savedSongs = songs.map { SavedSong.fromSongItem(it) }, thumbnailUrl = songs.firstOrNull()?.thumbnail)
+                .also { savePlaylistUpdate(it) }
+        } else {
+            createPlaylist(title, songs)
+        }
+        openPlaylistDetail(playlist)
+        "${songs.size} canciones nuevas según tus gustos"
+    }
+
+    /** "Modificar con IA" (playlists of this PC). */
+    fun modifyPlaylistWithAi(playlistId: String, instruction: String) = runAi("Modificar con IA") { log ->
+        val playlist = PlaylistStore.getPlaylist(playlistId) ?: error("La playlist ya no existe")
+        val songs = playlist.songs
+        val change = echo.music.desktop.recommend.AiPlaylists.modify(aiAccount(), songs, instruction, log).getOrThrow()
+        val kept = songs.filterIndexed { i, _ -> i !in change.removeIndexes }
+        val updated = playlist.copy(savedSongs = (kept + change.additions).map { SavedSong.fromSongItem(it) })
+        savePlaylistUpdate(updated)
+        _selectedPlaylistDetail.value = PlaylistStore.getPlaylist(playlistId)
+        "Quitadas ${change.removeIndexes.size}, añadidas ${change.additions.size}"
+    }
+
     // --- Audífonos (Bluetooth o con cable) ---
     /** Output whose disconnection paused the music, and when. */
     private var pausedForOutput: String? = null
@@ -2671,6 +2907,7 @@ class DesktopAppModel(
         if (_prefs.value.localMusicFolders.isNotEmpty()) rescanLocalMusic()
         startScrobbleTracking()
         startHeadphoneWatch()
+        startFlowFollower()
 
         // SponsorBlock: jump over marked parts (each one once per playback).
         scope.launch {
@@ -2796,4 +3033,12 @@ data class UpdateState(
     val downloading: Float? = null,
     /** Version downloaded and verified, waiting for Echo Music to close. */
     val readyVersion: String? = null
+)
+
+/** A running or finished AI playlist job (shown in a small dialog). */
+data class AiTask(
+    val title: String,
+    val log: String,
+    val running: Boolean,
+    val error: String? = null
 )
