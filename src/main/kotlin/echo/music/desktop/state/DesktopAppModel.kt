@@ -823,6 +823,124 @@ class DesktopAppModel(
 
     // Listen Together (Escuchar Juntos)
     val listenTogetherManager = echo.music.desktop.listentogether.DesktopListenTogetherManager()
+
+    // --- Echo Connect (Echo Music para Android en la misma Wi-Fi) ---
+    val echoConnect = echo.music.desktop.connect.EchoConnectManager(object : echo.music.desktop.connect.EchoConnectApp {
+        override fun playback(): echo.music.desktop.connect.EchoConnectApp.Playback {
+            val state = playbackState.value
+            val song = _currentSong.value
+            val loaded = song != null && state.videoId == song.id
+            return echo.music.desktop.connect.EchoConnectApp.Playback(
+                queue = _queue.value,
+                index = _currentIndex.value,
+                current = song,
+                playing = loaded && state.isPlaying,
+                positionMs = currentPositionForSession(),
+                durationMs = if (loaded) state.durationMs else 0L,
+                volume = state.volume,
+                shuffle = _isShuffle.value,
+                repeat = when (_repeatMode.value) {
+                    RepeatMode.ONE -> "one"
+                    RepeatMode.ALL -> "all"
+                    RepeatMode.OFF -> "off"
+                }
+            )
+        }
+
+        override fun play() {
+            if (!playbackState.value.isPlaying) togglePlayPause()
+        }
+
+        override fun pause() {
+            if (playbackState.value.isPlaying) togglePlayPause()
+        }
+
+        override fun togglePlay() = togglePlayPause()
+        override fun next() = playNext()
+        override fun previous() = playPrevious(allowRestart = false)
+        override fun seek(positionMs: Long) = seekToPositionMs(positionMs)
+        override fun setVolume(volume: Float) = this@DesktopAppModel.setVolume(volume)
+
+        override fun setShuffle(enabled: Boolean) {
+            if (_isShuffle.value != enabled) toggleShuffle()
+        }
+
+        override fun setRepeat(mode: String) {
+            _repeatMode.value = when (mode) {
+                "one" -> RepeatMode.ONE
+                "all" -> RepeatMode.ALL
+                else -> RepeatMode.OFF
+            }
+            PreferencesStore.update { it.copy(repeatMode = _repeatMode.value.name) }
+        }
+
+        override fun playIndex(index: Int) {
+            val q = _queue.value
+            q.getOrNull(index)?.let { playSong(it, q) }
+        }
+
+        override fun addToQueue(song: SongItem) {
+            if (_queue.value.none { it.id == song.id }) {
+                _queue.value = _queue.value + song
+                savePlaybackSession()
+            }
+        }
+
+        override fun playQueue(songs: List<SongItem>, index: Int, positionMs: Long, play: Boolean) {
+            val song = songs.getOrNull(index) ?: return
+            pendingResume = song.id to positionMs
+            if (play) {
+                playSongInternal(song, songs, resetShuffle = true)
+            } else {
+                if (playbackState.value.isPlaying) playerEngine.pause()
+                _queue.value = songs
+                _currentIndex.value = index
+                _currentSong.value = song
+                playRequestId = 0L
+                savePlaybackSession()
+            }
+        }
+
+        override fun account(): echo.music.desktop.connect.AccountSyncDto? {
+            val account = AccountStore.getYouTubeAccount()?.takeIf { it.cookie.isNotBlank() } ?: return null
+            return echo.music.desktop.connect.AccountSyncDto(
+                cookie = account.cookie,
+                name = account.name,
+                email = account.email,
+                channelHandle = account.channelHandle,
+                updatedAtMs = System.currentTimeMillis()
+            )
+        }
+
+        override suspend fun signIn(cookie: String): Result<String> {
+            val result = YouTubeSyncService.loginWithCookie(cookie)
+            result.onSuccess { account ->
+                withContext(Dispatchers.Main) {
+                    _youtubeAccount.value = account
+                    _statusMessage.value = "Echo Connect: conectado a YouTube Music como ${account.name}"
+                    syncYouTubePlaylists()
+                }
+            }
+            return result.map { it.name }
+        }
+
+        override fun localPlaylists(): List<echo.music.desktop.connect.PlaylistSyncDto> =
+            echo.music.desktop.connect.PlaylistSync.outgoing(PlaylistStore.getPlaylists(), System.currentTimeMillis())
+
+        override fun mergePlaylists(incoming: List<echo.music.desktop.connect.PlaylistSyncDto>, from: String): Int {
+            val changed = echo.music.desktop.connect.PlaylistSync.merge(PlaylistStore.getPlaylists(), incoming, from, System.currentTimeMillis())
+            if (changed.isEmpty()) return 0
+            changed.forEach { PlaylistStore.savePlaylist(it) }
+            _userPlaylists.value = PlaylistStore.getPlaylists()
+            return changed.size
+        }
+
+        override fun bringToFront() = echo.music.desktop.system.SingleInstance.requestShow()
+
+        override fun notify(message: String) {
+            _statusMessage.value = message
+        }
+    })
     private val _isListenTogetherModalOpen = MutableStateFlow(false)
     val isListenTogetherModalOpen: StateFlow<Boolean> = _isListenTogetherModalOpen.asStateFlow()
 
@@ -3174,6 +3292,7 @@ class DesktopAppModel(
 
         // Continue where the user left off (queue + position), without auto-playing.
         restorePlaybackSession()
+        echoConnect.start()
         scope.launch {
             while (true) {
                 delay(5_000)
@@ -3184,6 +3303,7 @@ class DesktopAppModel(
 
     fun release() {
         // Synchronous: the app is closing.
+        echoConnect.shutdown()
         PlaybackSessionStore.save(_queue.value, _currentIndex.value, currentPositionForSession())
         cancelSleepTimer()
         playerEngine.release()

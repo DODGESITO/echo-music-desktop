@@ -139,6 +139,8 @@ dependencies {
 
     // org.json is built into Android; the shared AI translation services use it
     implementation("org.json:json:20240303")
+    // Echo Connect: finds Echo Music for Android on the local network (mDNS)
+    implementation("org.jmdns:jmdns:3.6.1")
 
     // Lyrics romanization (same libraries as the phone app): Japanese and Chinese
     implementation("com.atilika.kuromoji:kuromoji-ipadic:0.9.0")

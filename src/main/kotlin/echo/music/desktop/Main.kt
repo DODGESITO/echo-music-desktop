@@ -554,7 +554,14 @@ private fun ApplicationScope.EchoMusicApp(args: Array<String>) {
                             saveWindowState()
                             openMiniPlayer()
                         },
+                        deviceButton = { echo.music.desktop.ui.components.EchoConnectDeviceButton(appModel) },
                         modifier = Modifier.align(Alignment.BottomCenter)
+                    )
+
+                    // Echo Connect: the music plays on the phone (shown right above the player bar).
+                    echo.music.desktop.ui.components.EchoConnectRemoteBar(
+                        appModel,
+                        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 90.dp)
                     )
 
                     // Full Expanded Player Modal
@@ -741,6 +748,9 @@ private fun ApplicationScope.EchoMusicApp(args: Array<String>) {
                             onRemoveHistory = { appModel.removeRecognition(it) }
                         )
                     }
+
+                    // Echo Connect pairing (a phone can ask at any moment)
+                    echo.music.desktop.ui.components.EchoConnectDialogs(appModel)
 
                     addToPlaylistSongs?.let { songs ->
                         AddToPlaylistModal(

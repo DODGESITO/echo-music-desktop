@@ -54,6 +54,8 @@ fun BottomPlayerBar(
     onAddToPlaylist: (() -> Unit)? = null,
     onArtistClick: ((String) -> Unit)? = null,
     onOpenMiniPlayer: (() -> Unit)? = null,
+    /** Echo Connect: choose where the music plays (this PC or the paired phone). */
+    deviceButton: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -345,6 +347,11 @@ fun BottomPlayerBar(
                             modifier = Modifier.size(18.dp)
                         )
                     }
+                    Spacer(modifier = Modifier.width(4.dp))
+                }
+
+                if (deviceButton != null) {
+                    deviceButton()
                     Spacer(modifier = Modifier.width(4.dp))
                 }
 

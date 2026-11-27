@@ -585,7 +585,7 @@ private fun speedLabel(speed: Float): String =
     (if (speed % 1f == 0f) speed.toInt().toString() else speed.toString().trimEnd('0')) + "x"
 
 @Composable
-private fun SettingRowFrame(content: @Composable RowScope.() -> Unit) {
+internal fun SettingRowFrame(content: @Composable RowScope.() -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -599,7 +599,7 @@ private fun SettingRowFrame(content: @Composable RowScope.() -> Unit) {
 }
 
 @Composable
-private fun RowScope.SettingTexts(title: String, description: String) {
+internal fun RowScope.SettingTexts(title: String, description: String) {
     Column(modifier = Modifier.weight(1f)) {
         Text(
             text = title,
@@ -612,7 +612,7 @@ private fun RowScope.SettingTexts(title: String, description: String) {
 }
 
 @Composable
-private fun ToggleRow(title: String, description: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+internal fun ToggleRow(title: String, description: String, checked: Boolean, onChange: (Boolean) -> Unit) {
     SettingRowFrame {
         SettingTexts(title, description)
         Switch(

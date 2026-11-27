@@ -22,6 +22,11 @@ object SingleInstance {
     /** Another launch asked this copy to show its window. */
     val showRequests: SharedFlow<Unit> = _showRequests
 
+    /** Brings the window forward from inside the app (e.g. a phone asking to pair). */
+    fun requestShow() {
+        _showRequests.tryEmit(Unit)
+    }
+
     /** True when this is the only copy; false when another one is running (it was told to [show]). */
     fun acquire(show: Boolean): Boolean {
         val socket = try {

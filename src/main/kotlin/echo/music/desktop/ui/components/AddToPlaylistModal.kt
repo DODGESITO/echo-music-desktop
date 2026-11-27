@@ -261,7 +261,7 @@ private fun PlaylistRow(
 }
 
 @Composable
-private fun ModalFrame(
+internal fun ModalFrame(
     title: String,
     subtitle: String,
     onClose: () -> Unit,

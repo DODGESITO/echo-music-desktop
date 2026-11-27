@@ -214,6 +214,10 @@ fun SettingsScreen(
             SpotifyAccountSettings(appModel)
         }
 
+        if (section == SettingsSection.CUENTAS) {
+            echo.music.desktop.ui.components.EchoConnectSettingsCard(appModel)
+        }
+
         if (section == SettingsSection.REPRODUCCION) {
         // Section: Audio DSP & Preferences
         SettingsCard(
