@@ -4,6 +4,7 @@ import com.music.innertube.NewPipeExtractor
 import com.music.innertube.YouTube
 import com.music.innertube.models.YouTubeClient
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.intOrNull
@@ -30,11 +31,22 @@ object DesktopStreamResolver {
 
     fun loudnessDbFor(videoId: String): Double? = loudnessByVideo[videoId]
 
+    /** Waits before each new try when YouTube is busy (429/503) or the connection failed. */
+    internal val RETRY_DELAYS_MS = listOf(3_000L, 6_000L, 12_000L)
+
+    /** HTTP codes that mean "try again in a moment", not "this song can't be played". */
+    internal fun isTemporaryStatus(code: Int) = code == 429 || code in 502..504
+
+    /** What went wrong during one try, to tell a busy server from an unplayable song. */
+    private class Attempt {
+        @Volatile var temporaryFailure = false
+    }
+
     /**
      * Validates that the stream URL actually responds with HTTP 200/206
      * before passing it to MediaPlayer, preventing 403 Forbidden playback errors.
      */
-    private fun validateStream(url: String): Boolean {
+    private fun validateStream(url: String, attempt: Attempt): Boolean {
         return try {
             val headers = PlayerClient.mediaHeadersFor(url)
             val requestBuilder = Request.Builder()
@@ -47,11 +59,13 @@ object DesktopStreamResolver {
                 val code = response.code
                 val ok = code in 200..299
                 if (!ok) {
+                    if (isTemporaryStatus(code)) attempt.temporaryFailure = true
                     println("[StreamResolver] Stream probe rejected with HTTP $code: ${url.take(60)}...")
                 }
                 ok
             }
         } catch (e: Exception) {
+            if (echo.music.desktop.system.ErrorLog.isNetworkError(e)) attempt.temporaryFailure = true
             println("[StreamResolver] Stream probe failed (${e.message}): ${url.take(60)}...")
             false
         }
@@ -61,7 +75,24 @@ object DesktopStreamResolver {
      * @param lowQuality pick the smallest AAC stream (data saver) instead of the best one.
      * The desktop player (JavaFX) only plays AAC/MP4 audio, so Opus/WebM is a last resort.
      */
-    suspend fun resolveStreamUrl(videoId: String, lowQuality: Boolean = false): Result<String> = withContext(Dispatchers.IO) {
+    suspend fun resolveStreamUrl(
+        videoId: String,
+        lowQuality: Boolean = false,
+        onRetry: ((attempt: Int, waitSeconds: Int) -> Unit)? = null
+    ): Result<String> {
+        var retries = 0
+        while (true) {
+            val attempt = Attempt()
+            val result = resolveOnce(videoId, lowQuality, attempt)
+            if (result.isSuccess || !attempt.temporaryFailure || retries >= RETRY_DELAYS_MS.size) return result
+            val wait = RETRY_DELAYS_MS[retries++]
+            println("[StreamResolver] $videoId: YouTube busy or connection failed, retry $retries in ${wait / 1000} s")
+            onRetry?.invoke(retries, (wait / 1000).toInt())
+            delay(wait)
+        }
+    }
+
+    private suspend fun resolveOnce(videoId: String, lowQuality: Boolean, attempt: Attempt): Result<String> = withContext(Dispatchers.IO) {
         // Ensure visitorData session is active
         if (YouTube.visitorData.isNullOrBlank()) {
             try {
@@ -74,6 +105,12 @@ object DesktopStreamResolver {
         // Method 1: Instant InnerTube API via VISIONOS (<300ms)
         try {
             val playerResult = YouTube.player(videoId, client = YouTubeClient.VISIONOS)
+            playerResult.exceptionOrNull()?.let { e ->
+                val status = (e as? io.ktor.client.plugins.ResponseException)?.response?.status?.value
+                if ((status != null && isTemporaryStatus(status)) || echo.music.desktop.system.ErrorLog.isNetworkError(e)) {
+                    attempt.temporaryFailure = true
+                }
+            }
             if (playerResult.isSuccess) {
                 val response = playerResult.getOrNull()
                 val loudness = response?.playerConfig?.audioConfig?.loudnessDb
@@ -89,7 +126,7 @@ object DesktopStreamResolver {
                     ?: formats.filter { it.isAudio && !it.url.isNullOrBlank() }.maxByOrNull { it.bitrate }?.url
 
                 if (!candidateUrl.isNullOrBlank()) {
-                    if (validateStream(candidateUrl)) {
+                    if (validateStream(candidateUrl, attempt)) {
                         println("[StreamResolver] Valid direct stream verified via VISIONOS")
                         return@withContext Result.success(LocalAudioProxy.getProxyUrl(candidateUrl))
                     }
@@ -101,7 +138,7 @@ object DesktopStreamResolver {
 
         // Method 2: System yt-dlp extractor (100% resilient on Windows desktop)
         val ytdlpUrl = resolveViaYtDlp(videoId, lowQuality)
-        if (!ytdlpUrl.isNullOrBlank() && validateStream(ytdlpUrl)) {
+        if (!ytdlpUrl.isNullOrBlank() && validateStream(ytdlpUrl, attempt)) {
             println("[StreamResolver] Stream verified and resolved via yt-dlp")
             return@withContext Result.success(LocalAudioProxy.getProxyUrl(ytdlpUrl))
         }
@@ -114,7 +151,7 @@ object DesktopStreamResolver {
                 ?: streams.firstOrNull { it.first in listOf(251, 250, 249) }?.second
                 ?: streams.firstOrNull()?.second
 
-            if (!streamUrl.isNullOrBlank() && validateStream(streamUrl)) {
+            if (!streamUrl.isNullOrBlank() && validateStream(streamUrl, attempt)) {
                 println("[StreamResolver] Stream verified via NewPipe fallback")
                 return@withContext Result.success(LocalAudioProxy.getProxyUrl(streamUrl))
             }
@@ -124,7 +161,7 @@ object DesktopStreamResolver {
 
         // Method 4: Piped API Fallback (Public instances)
         val pipedUrl = resolveViaPiped(videoId)
-        if (!pipedUrl.isNullOrBlank() && validateStream(pipedUrl)) {
+        if (!pipedUrl.isNullOrBlank() && validateStream(pipedUrl, attempt)) {
             println("[StreamResolver] Stream verified via Piped API fallback")
             return@withContext Result.success(LocalAudioProxy.getProxyUrl(pipedUrl))
         }

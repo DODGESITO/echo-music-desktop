@@ -1399,7 +1399,12 @@ class DesktopAppModel(
                 } else {
                     val streamResult = DesktopStreamResolver.resolveStreamUrl(
                         song.id,
-                        lowQuality = _prefs.value.audioQuality == "LOW"
+                        lowQuality = _prefs.value.audioQuality == "LOW",
+                        onRetry = { attempt, waitSeconds ->
+                            if (requestId == playRequestId) {
+                                _statusMessage.value = "YouTube está ocupado, reintentando ${song.title} en $waitSeconds s ($attempt de ${DesktopStreamResolver.RETRY_DELAYS_MS.size})..."
+                            }
+                        }
                     )
                     if (streamResult.isSuccess) streamResult.getOrThrow() else null
                 }

@@ -43,10 +43,19 @@ fun main(args: Array<String>) {
     // Already open (maybe hidden in the tray): show that one instead of opening a second copy.
     if (!echo.music.desktop.system.SingleInstance.acquire(show = echo.music.desktop.system.WindowsStartup.MINIMIZED_ARG !in args)) return
     if (installPendingUpdate()) return
+    echo.music.desktop.system.ErrorLog.install()
     runApp(args)
 }
 
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 private fun runApp(args: Array<String>) = application {
+    CompositionLocalProvider(LocalWindowExceptionHandlerFactory provides echo.music.desktop.system.ErrorLog.windowExceptionHandlerFactory) {
+        EchoMusicApp(args)
+    }
+}
+
+@Composable
+private fun ApplicationScope.EchoMusicApp(args: Array<String>) {
     val prefs = PreferencesStore.current
     remember { echo.music.desktop.ui.theme.NothingColors.applyTheme(prefs.themeAccent, prefs.themeBackground) }
     val windowState = rememberWindowState(
