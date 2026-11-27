@@ -832,6 +832,20 @@ fun UpdateSettings(appModel: DesktopAppModel) {
                 }
             }
         }
+        update.lastFailure?.let { failure ->
+            val time = java.time.Instant.ofEpochMilli(failure.at).atZone(java.time.ZoneId.systemDefault())
+                .format(java.time.format.DateTimeFormatter.ofPattern("d/M HH:mm"))
+            Spacer(Modifier.height(10.dp))
+            SettingRowFrame {
+                SettingTexts(
+                    "No se pudo instalar la versión ${failure.version}",
+                    "${echo.music.desktop.system.UpdateInstaller.describe(failure.code).replaceFirstChar { it.uppercase() }} (código ${failure.code}), $time."
+                )
+                TextButton(onClick = { appModel.openUpdateFolder() }) {
+                    Text("Ver registro", color = NothingColors.AccentRed)
+                }
+            }
+        }
         Spacer(Modifier.height(10.dp))
         ToggleRow(
             title = "Buscar al iniciar",

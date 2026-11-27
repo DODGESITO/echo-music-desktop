@@ -28,6 +28,10 @@ object UpdateInstaller {
     @Serializable
     private data class Pending(val version: String, val file: String, val sha256: String, val attempts: Int = 0)
 
+    /** A silent install that did not work: that version is not retried automatically. */
+    @Serializable
+    data class Failure(val version: String, val code: Int, val at: Long)
+
     private val json = Json { ignoreUnknownKeys = true }
     /** Tests point this somewhere else. */
     internal var baseDir: File? = null
@@ -35,6 +39,10 @@ object UpdateInstaller {
         get() = baseDir ?: File(System.getenv("LOCALAPPDATA") ?: System.getProperty("java.io.tmpdir"), "EchoMusic-updates")
     private val pendingFile get() = File(dir, "pending.json")
     private val outcomeFile get() = File(dir, "result.json")
+    private val failureFile get() = File(dir, "last-failure.json")
+    /** Files kept between updates (what happened, for Settings and for diagnosing). */
+    private val keptFiles = setOf("install.log", "history.log", "last-failure.json")
+    val folder: File get() = dir
 
     /** Only the installed per-user app can update itself without asking for permissions. */
     val canAutoInstall: Boolean
@@ -121,11 +129,45 @@ object UpdateInstaller {
         val version = pendingVersion()
         clear()
         // 3010: installed, Windows asks for a restart to finish (some file was in use).
-        (version ?: AppInfo.version) to (text.toIntOrNull() ?: -1)
+        val code = text.toIntOrNull() ?: -1
+        val installed = version ?: AppInfo.version
+        if (code == 0 || code == 3010) {
+            failureFile.delete()
+        } else {
+            runCatching {
+                failureFile.writeText(json.encodeToString(Failure.serializer(), Failure(installed, code, System.currentTimeMillis())))
+            }
+        }
+        installed to code
+    }.getOrNull()
+
+    /** The last silent install that failed, if it was not followed by one that worked. */
+    fun lastFailure(): Failure? = runCatching {
+        val failure = json.decodeFromString(Failure.serializer(), failureFile.readText())
+        // Installed some other way since then (e.g. by hand): nothing to report any more.
+        if (!UpdateChecker.isNewer(failure.version, AppInfo.version)) {
+            failureFile.delete()
+            return null
+        }
+        failure
     }.getOrNull()
 
     fun clear() {
-        dir.listFiles()?.filter { it.name != "install.log" }?.forEach { it.delete() }
+        dir.listFiles()?.filter { it.name !in keptFiles }?.forEach { it.delete() }
+    }
+
+    /** What a msiexec exit code means, in words. */
+    fun describe(code: Int): String = when (code) {
+        0 -> "instalada"
+        3010 -> "instalada, falta reiniciar Windows"
+        1602 -> "se canceló"
+        1603 -> "error grave del instalador"
+        1618 -> "Windows estaba instalando otra cosa"
+        1619 -> "no se encontró el instalador descargado"
+        1622 -> "no se pudo abrir el registro de instalación"
+        1625, 1643 -> "una directiva de Windows no permite instalar"
+        1638 -> "ya hay otra versión de Echo Music instalada de otra forma"
+        else -> "código $code"
     }
 
     // ------------------------------------------------------------------ install
@@ -146,32 +188,39 @@ object UpdateInstaller {
             ?.pid())
         SingleInstance.release()
         val script = File(dir, "install-update.ps1")
-        script.writeText(
-            buildString {
-                appendLine("\$ErrorActionPreference = 'Continue'")
-                appendLine("foreach (\$id in @(${pids.joinToString(",")})) { try { Wait-Process -Id \$id -Timeout 120 -ErrorAction Stop } catch {} }")
-                // Any other copy of Echo Music still open (e.g. hidden in the tray) keeps the files in
-                // use and Windows could only replace them after a reboot: close it first.
-                appendLine("\$exe = ${ps(exe)}")
-                appendLine("Get-Process -Name EchoMusic -ErrorAction SilentlyContinue | Where-Object { \$_.Path -eq \$exe } | Stop-Process -Force -ErrorAction SilentlyContinue")
-                appendLine("Start-Sleep -Seconds 2")
-                appendLine("\$log = ${ps(File(dir, "install.log").absolutePath)}")
-                // 1618: another installation is running; wait for it and try again.
-                appendLine("\$code = 1618")
-                appendLine("for (\$i = 0; \$i -lt 8 -and \$code -eq 1618; \$i++) {")
-                appendLine("  if (\$i -gt 0) { Start-Sleep -Seconds 15 }")
-                appendLine("  \$p = Start-Process -FilePath 'msiexec.exe' -ArgumentList @('/i', '\"' + ${ps(msi.absolutePath)} + '\"', '/qn', '/norestart', '/l*v', '\"' + \$log + '\"') -Wait -PassThru")
-                appendLine("  \$code = \$p.ExitCode")
-                appendLine("}")
-                appendLine("Set-Content -Path ${ps(outcomeFile.absolutePath)} -Value \$code")
-                val reopenArgs = if (reopenMinimized) " -ArgumentList '${WindowsStartup.MINIMIZED_ARG}'" else ""
-                appendLine("if (Test-Path ${ps(exe)}) { Start-Process -FilePath ${ps(exe)}$reopenArgs }")
-            },
-            Charsets.UTF_8
-        )
+        script.writeText(buildScript(msi, exe, pids, reopenMinimized), Charsets.UTF_8)
         val command = "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File \"${script.absolutePath}\""
         return startDetached(command)
     }
+
+    /**
+     * The helper script: waits for [pids] to exit, closes any other copy of [exe], runs msiexec
+     * silently, writes its exit code and opens [exe] again.
+     */
+    internal fun buildScript(msi: File, exe: String, pids: List<Long>, reopenMinimized: Boolean): String =
+        buildString {
+            appendLine("\$ErrorActionPreference = 'Continue'")
+            appendLine("foreach (\$id in @(${pids.joinToString(",")})) { try { Wait-Process -Id \$id -Timeout 120 -ErrorAction Stop } catch {} }")
+            // Any other copy of Echo Music still open (e.g. hidden in the tray) keeps the files in
+            // use and Windows could only replace them after a reboot: close it first.
+            appendLine("\$exe = ${ps(exe)}")
+            appendLine("Get-Process -Name EchoMusic -ErrorAction SilentlyContinue | Where-Object { \$_.Path -eq \$exe } | Stop-Process -Force -ErrorAction SilentlyContinue")
+            appendLine("Start-Sleep -Seconds 2")
+            appendLine("\$log = ${ps(File(dir, "install.log").absolutePath)}")
+            // 1618: another installation is running; wait for it and try again.
+            appendLine("\$code = 1618")
+            appendLine("for (\$i = 0; \$i -lt 8 -and \$code -eq 1618; \$i++) {")
+            appendLine("  if (\$i -gt 0) { Start-Sleep -Seconds 15 }")
+            // One string: Windows PowerShell 5.1 passes quotes inside an argument array unreliably,
+            // and msiexec then fails at once with 1622 (cannot open the log) without installing.
+            appendLine("  \$p = Start-Process -FilePath 'msiexec.exe' -ArgumentList ('/i \"' + ${ps(msi.absolutePath)} + '\" /qn /norestart /l*v \"' + \$log + '\"') -Wait -PassThru")
+            appendLine("  \$code = \$p.ExitCode")
+            appendLine("}")
+            appendLine("Set-Content -Path ${ps(outcomeFile.absolutePath)} -Value \$code")
+            appendLine("Add-Content -Path ${ps(File(dir, "history.log").absolutePath)} -Value ((Get-Date -Format 's') + '  ' + ${ps(msi.name)} + '  msiexec ' + \$code)")
+            val reopenArgs = if (reopenMinimized) " -ArgumentList '${WindowsStartup.MINIMIZED_ARG}'" else ""
+            appendLine("if (Test-Path ${ps(exe)}) { Start-Process -FilePath ${ps(exe)}$reopenArgs }")
+        }
 
     /** PowerShell single-quoted string. */
     private fun ps(value: String) = "'" + value.replace("'", "''") + "'"

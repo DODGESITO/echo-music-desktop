@@ -2991,18 +2991,19 @@ class DesktopAppModel(
             val repo = echo.music.desktop.system.UpdateChecker.DEFAULT_REPO
             val result = withContext(Dispatchers.IO) { echo.music.desktop.system.UpdateChecker.check(repo) }
             updatePreferences { it.copy(lastUpdateCheck = System.currentTimeMillis()) }
+            val lastFailure = echo.music.desktop.system.UpdateInstaller.lastFailure()
             _update.value = when (result) {
                 is echo.music.desktop.system.UpdateResult.Available ->
-                    UpdateState(available = result.info, message = "Echo Music ${result.info.version} está disponible.")
+                    UpdateState(available = result.info, message = "Echo Music ${result.info.version} está disponible.", lastFailure = lastFailure)
                 echo.music.desktop.system.UpdateResult.UpToDate ->
-                    UpdateState(message = "Tienes la última versión (${echo.music.desktop.system.AppInfo.version}).")
-                is echo.music.desktop.system.UpdateResult.Failed -> UpdateState(message = result.message)
+                    UpdateState(message = "Tienes la última versión (${echo.music.desktop.system.AppInfo.version}).", lastFailure = lastFailure)
+                is echo.music.desktop.system.UpdateResult.Failed -> UpdateState(message = result.message, lastFailure = lastFailure)
             }
             if (result is echo.music.desktop.system.UpdateResult.Available &&
                 (manual || result.info.version != _prefs.value.skippedUpdateVersion)
             ) {
                 _updateBanner.value = result.info
-                if (_prefs.value.autoInstallUpdates) downloadUpdate(result.info)
+                if (_prefs.value.autoInstallUpdates) downloadUpdate(result.info, manual)
             }
         }
     }
@@ -3043,9 +3044,18 @@ class DesktopAppModel(
     /** True when this copy can install updates by itself (installed for this user, without admin). */
     val canAutoInstallUpdates: Boolean get() = echo.music.desktop.system.UpdateInstaller.canAutoInstall
 
-    private fun downloadUpdate(info: echo.music.desktop.system.UpdateInfo) {
+    private fun downloadUpdate(info: echo.music.desktop.system.UpdateInfo, manual: Boolean) {
         val pkg = info.installer ?: return
         if (!echo.music.desktop.system.UpdateInstaller.canAutoInstall || _update.value.downloading != null) return
+        // A version whose silent install already failed is only tried again when asked ("Buscar ahora"):
+        // otherwise it would be downloaded and retried over and over while Echo Music sits in the tray.
+        val failure = echo.music.desktop.system.UpdateInstaller.lastFailure()
+        if (!manual && failure?.version == info.version) {
+            _update.value = _update.value.copy(
+                message = "Echo Music ${info.version} no se pudo instalar sola. Pulsa \"Buscar ahora\" para reintentar o descárgala."
+            )
+            return
+        }
         if (echo.music.desktop.system.UpdateInstaller.pendingVersion() == info.version && echo.music.desktop.system.UpdateInstaller.pendingInstaller() != null) {
             _update.value = _update.value.copy(readyVersion = info.version, message = "Echo Music ${info.version} se instalará al cerrar.")
             return
@@ -3072,6 +3082,11 @@ class DesktopAppModel(
     fun restartToUpdate() {
         if (echo.music.desktop.system.UpdateInstaller.pendingInstaller() == null) return
         _exitRequests.tryEmit(Unit)
+    }
+
+    /** Opens the folder with the update's install.log and history.log. */
+    fun openUpdateFolder() {
+        runCatching { java.awt.Desktop.getDesktop().open(echo.music.desktop.system.UpdateInstaller.folder.apply { mkdirs() }) }
     }
 
     fun openUpdatePage() {
@@ -3110,10 +3125,10 @@ class DesktopAppModel(
             _statusMessage.value = when (code) {
                 0 -> "Echo Music se actualizó a la versión $version"
                 3010 -> "La versión $version termina de instalarse al reiniciar Windows"
-                1618 -> "Windows estaba instalando otra cosa; la versión $version se intentará de nuevo"
-                else -> "No se pudo instalar la versión $version (código $code)"
+                else -> "No se pudo instalar la versión $version: ${echo.music.desktop.system.UpdateInstaller.describe(code)}"
             }
         }
+        _update.value = _update.value.copy(lastFailure = echo.music.desktop.system.UpdateInstaller.lastFailure())
         startUpdateWatch()
         if (_prefs.value.localMusicFolders.isNotEmpty()) rescanLocalMusic()
         startScrobbleTracking()
@@ -3248,7 +3263,9 @@ data class UpdateState(
     /** Download progress (0..1) of the new version, while it downloads. */
     val downloading: Float? = null,
     /** Version downloaded and verified, waiting for Echo Music to close. */
-    val readyVersion: String? = null
+    val readyVersion: String? = null,
+    /** Last silent install that did not work (shown in Settings until one works). */
+    val lastFailure: echo.music.desktop.system.UpdateInstaller.Failure? = null
 )
 
 /** A running or finished AI playlist job (shown in a small dialog). */
