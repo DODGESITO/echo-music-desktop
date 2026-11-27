@@ -5,6 +5,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -416,14 +418,16 @@ private fun PlaylistCard(
         playlist.songs.count { appModel.isDownloaded(it.id) }
     }
     val isFullyDownloaded = playlist.songs.isNotEmpty() && downloadedCount == playlist.songs.size
+    val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val hovered by interaction.collectIsHoveredAsState()
 
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(16.dp))
-            .background(NothingColors.Surface)
-            .border(1.dp, NothingColors.SurfaceBorder, RoundedCornerShape(16.dp))
+            .background(if (hovered) NothingColors.Surface else Color.Transparent)
+            .hoverable(interaction)
             .clickable(onClick = onClick)
-            .padding(14.dp)
+            .padding(10.dp)
     ) {
         // Thumbnail + play overlay button
         Box(
@@ -450,8 +454,8 @@ private fun PlaylistCard(
                 )
             }
 
-            // Quick Play Button at bottom right
-            if (playlist.songs.isNotEmpty()) {
+            // Quick play, on hover
+            if (playlist.songs.isNotEmpty() && hovered) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
@@ -471,32 +475,6 @@ private fun PlaylistCard(
                 }
             }
 
-            // Source Badge at top left
-            val (badgeText, badgeBg, badgeColor) = when (playlist.sourceType) {
-                PlaylistSourceType.SPOTIFY -> Triple("SPOTIFY", Color(0xFF1DB954), Color.White)
-                PlaylistSourceType.YOUTUBE_MUSIC -> Triple("YT MUSIC", NothingColors.AccentRed, Color.White)
-                PlaylistSourceType.LOCAL -> Triple("LOCAL", NothingColors.SurfaceElevated, NothingColors.TextSecondary)
-                PlaylistSourceType.PODCAST -> Triple("PODCAST", Color(0xFF9C6ADE).copy(alpha = 0.2f), Color(0xFF9C6ADE))
-            }
-
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(8.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(badgeBg.copy(alpha = 0.9f))
-                    .padding(horizontal = 6.dp, vertical = 2.dp)
-            ) {
-                Text(
-                    text = badgeText,
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Bold,
-                        color = badgeColor,
-                        fontSize = 9.sp
-                    )
-                )
-            }
         }
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -518,7 +496,7 @@ private fun PlaylistCard(
                 modifier = Modifier.weight(1f)
             )
 
-            if (playlist.songs.isNotEmpty()) {
+            if (playlist.songs.isNotEmpty() && (hovered || isDownloading || isFullyDownloaded)) {
                 Spacer(modifier = Modifier.width(6.dp))
                 if (isDownloading) {
                     Box(
@@ -575,10 +553,9 @@ private fun PlaylistCard(
         // Author and track count
         Text(
             text = buildString {
-                append("${playlist.author} • ${playlist.songs.size} pistas")
-                if (downloadedCount > 0 && !isFullyDownloaded) {
-                    append(" ($downloadedCount desc.)")
-                }
+                if (playlist.sourceType == PlaylistSourceType.YOUTUBE_MUSIC) append("YouTube Music • ")
+                if (playlist.sourceType == PlaylistSourceType.PODCAST) append("Podcast • ")
+                append("${playlist.author} • ${playlist.songs.size} canciones")
             },
             style = MaterialTheme.typography.bodySmall.copy(
                 color = NothingColors.TextSecondary,

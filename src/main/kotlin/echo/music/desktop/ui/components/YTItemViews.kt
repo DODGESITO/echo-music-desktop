@@ -1,6 +1,11 @@
 package echo.music.desktop.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -104,16 +109,14 @@ fun YTItemCard(
     isPlaying: Boolean = false,
     modifier: Modifier = Modifier
 ) {
+    val interaction = remember { MutableInteractionSource() }
+    val hovered by interaction.collectIsHoveredAsState()
     Column(
         modifier = modifier
             .width(158.dp)
             .clip(RoundedCornerShape(14.dp))
-            .background(NothingColors.Surface)
-            .border(
-                1.dp,
-                if (isCurrent) NothingColors.AccentRed.copy(alpha = 0.6f) else NothingColors.SurfaceBorder,
-                RoundedCornerShape(14.dp)
-            )
+            .background(if (hovered) NothingColors.Surface else Color.Transparent)
+            .hoverable(interaction)
             .clickable(onClick = onClick)
             .padding(10.dp),
         horizontalAlignment = if (item is ArtistItem) Alignment.CenterHorizontally else Alignment.Start

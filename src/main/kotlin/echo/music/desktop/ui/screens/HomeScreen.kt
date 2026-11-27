@@ -86,12 +86,10 @@ fun HomeScreen(
             item {
                 Column {
                     Text(
-                        text = "ESCUCHADO RECIENTEMENTE",
-                        style = MaterialTheme.typography.labelMedium.copy(
-                            fontFamily = FontFamily.Monospace,
+                        text = "Escuchado recientemente",
+                        style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.5.sp,
-                            color = NothingColors.TextSecondary
+                            color = NothingColors.TextPrimary
                         ),
                         modifier = Modifier.padding(bottom = 12.dp)
                     )
@@ -154,16 +152,6 @@ fun HomeScreen(
                     LaunchedEffect(homeSections.size) { appModel.loadMoreHome() }
                 }
                 Column {
-                    if (!section.label.isNullOrBlank()) {
-                        Text(
-                            text = section.label!!.uppercase(),
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontFamily = FontFamily.Monospace,
-                                letterSpacing = 1.5.sp,
-                                color = NothingColors.TextMuted
-                            )
-                        )
-                    }
                     Text(
                         text = section.title,
                         style = MaterialTheme.typography.titleMedium.copy(
@@ -172,7 +160,7 @@ fun HomeScreen(
                         ),
                         modifier = Modifier.padding(bottom = 12.dp)
                     )
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.offset(x = (-10).dp)) {
                         items(section.items) { ytItem ->
                             val isCurrent = currentSong?.id == ytItem.id
                             YTItemCard(
@@ -212,13 +200,8 @@ fun HomeScreen(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "TENDENCIAS DESTACADAS",
-                        style = MaterialTheme.typography.labelMedium.copy(
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.5.sp,
-                            color = NothingColors.TextPrimary
-                        )
+                        text = "Tendencias",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = NothingColors.TextPrimary)
                     )
                 }
                 if (homeSongs.isNotEmpty()) {
