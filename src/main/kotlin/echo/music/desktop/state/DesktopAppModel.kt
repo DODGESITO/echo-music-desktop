@@ -1386,6 +1386,8 @@ class DesktopAppModel(
             try {
                 val isLocalFile = LocalMusicLibrary.isLocal(song.id)
                 val localPath = LocalMusicLibrary.pathFor(song.id) ?: DownloadStore.getLocalFilePath(song.id)
+                    // Video mode: the music video already downloaded (picture and sound in one file).
+                    ?: if (_videoMode.value) echo.music.desktop.video.MusicVideoService.cachedFile(song)?.absolutePath else null
                 if (isLocalFile && localPath == null) {
                     // A song from "En este PC" whose file was moved/deleted or whose folder was removed:
                     // it can't be found on YouTube by its local id.
@@ -2535,6 +2537,78 @@ class DesktopAppModel(
     }
 
     // Runs after every property above is initialized (init blocks run in declaration order).
+    // --- Modo video (videoclip oficial) ---
+    private val _videoMode = MutableStateFlow(false)
+    val videoMode: StateFlow<Boolean> = _videoMode.asStateFlow()
+    private val _video = MutableStateFlow(VideoState())
+    val video: StateFlow<VideoState> = _video.asStateFlow()
+    private var videoJob: kotlinx.coroutines.Job? = null
+
+    fun toggleVideoMode() {
+        _videoMode.value = !_videoMode.value
+        if (_videoMode.value) {
+            prepareVideoForCurrent()
+        } else {
+            // The sound keeps going from where it is; only the picture goes away.
+            videoJob?.cancel()
+            _video.value = VideoState()
+        }
+    }
+
+    private fun prepareVideoForCurrent() {
+        val song = _currentSong.value ?: return
+        if (LocalMusicLibrary.isLocal(song.id)) {
+            _video.value = VideoState(song.id, message = "Las canciones de este PC no tienen video")
+            return
+        }
+        videoJob?.cancel()
+        _video.value = VideoState(song.id, loading = true)
+        videoJob = scope.launch {
+            val file = echo.music.desktop.video.MusicVideoService.prepare(song) { p -> _video.update { if (it.songId == song.id) it.copy(progress = p) else it } }
+            if (!_videoMode.value || _currentSong.value?.id != song.id) return@launch
+            if (file == null) {
+                _video.value = VideoState(
+                    song.id,
+                    message = if (echo.music.desktop.video.MusicVideoService.isUnavailable(song)) "YouTube no deja cargar el video de esta canción"
+                    else "Esta canción no tiene video oficial"
+                )
+                return@launch
+            }
+            // Play the video's own sound from the same file, so picture and sound always match.
+            if (playingVideoFile != file) {
+                playerEngine.switchSource(file.toURI().toString(), playbackState.value.currentPositionMs)
+                playingVideoFile = file
+            }
+            _video.value = VideoState(song.id, file = file)
+            prefetchNextVideo()
+        }
+    }
+
+    /** The video file the audio engine is playing right now (its sound), if any. */
+    private var playingVideoFile: java.io.File? = null
+
+    /** The next song's video, ready before it starts. */
+    private fun prefetchNextVideo() {
+        val next = _queue.value.getOrNull(_currentIndex.value + 1) ?: return
+        if (LocalMusicLibrary.isLocal(next.id)) return
+        scope.launch(Dispatchers.IO) { echo.music.desktop.video.MusicVideoService.prepare(next) }
+    }
+
+    private fun startVideoFollower() = scope.launch {
+        currentSong.collect { song ->
+            if (!_videoMode.value || song == null) return@collect
+            val cached = echo.music.desktop.video.MusicVideoService.cachedFile(song)
+            playingVideoFile = cached
+            if (cached != null) {
+                // It started straight from the downloaded video.
+                _video.value = VideoState(song.id, file = cached)
+                prefetchNextVideo()
+            } else {
+                prepareVideoForCurrent()
+            }
+        }
+    }
+
     // --- Music Flow (descubrir deslizando) ---
     private val flowSession = echo.music.desktop.recommend.FlowSession(
         echo.music.desktop.recommend.YouTubeFlowSource(
@@ -2908,6 +2982,7 @@ class DesktopAppModel(
         startScrobbleTracking()
         startHeadphoneWatch()
         startFlowFollower()
+        startVideoFollower()
 
         // SponsorBlock: jump over marked parts (each one once per playback).
         scope.launch {
@@ -3041,4 +3116,13 @@ data class AiTask(
     val log: String,
     val running: Boolean,
     val error: String? = null
+)
+
+/** Video mode for the current song: downloading, ready (file) or why there is none. */
+data class VideoState(
+    val songId: String? = null,
+    val loading: Boolean = false,
+    val progress: Float? = null,
+    val file: java.io.File? = null,
+    val message: String? = null
 )

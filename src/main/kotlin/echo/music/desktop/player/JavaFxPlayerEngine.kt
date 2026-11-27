@@ -231,6 +231,21 @@ class JavaFxPlayerEngine : AudioPlayerEngine {
         }
     }
 
+    override fun switchSource(url: String, positionMs: Long) {
+        Platform.runLater {
+            val keepPlaying = _state.value.isPlaying || mediaPlayer?.status == MediaPlayer.Status.PLAYING
+            generation++
+            streamUrl = url.takeIf { it.startsWith("http") }
+            seekableCopy = null
+            usingCopy = false
+            pendingSeekMs = null
+            copyJob?.cancel()
+            copyJob = null
+            stopProgressTracking()
+            createPlayer(url, startAtMs = positionMs.coerceAtLeast(0), autoPlay = keepPlaying)
+        }
+    }
+
     override fun seekTo(positionMs: Long) {
         Platform.runLater {
             _state.update { it.copy(currentPositionMs = positionMs) }

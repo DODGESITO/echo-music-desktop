@@ -37,5 +37,7 @@ interface AudioPlayerEngine {
     fun setVolumeGain(gain: Float) {}
     /** Playback speed (0.5x – 2x). Applies to the current and next tracks. */
     fun setPlaybackRate(rate: Float) {}
+    /** Same song, another source (e.g. its music video file), continuing at [positionMs]. */
+    fun switchSource(url: String, positionMs: Long) {}
     fun release()
 }

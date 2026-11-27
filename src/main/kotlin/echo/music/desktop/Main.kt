@@ -378,6 +378,8 @@ fun main(args: Array<String>) = if (installPendingUpdate()) Unit else applicatio
                 val localTracks by appModel.localTracks.collectAsState()
                 val comments by appModel.comments.collectAsState()
                 val canvasFile by appModel.canvasFile.collectAsState()
+                val videoMode by appModel.videoMode.collectAsState()
+                val videoState by appModel.video.collectAsState()
                 val prefs by appModel.prefs.collectAsState()
                 val isExpandedPlayerOpen by appModel.isExpandedPlayerOpen.collectAsState()
                 val favorites by appModel.favorites.collectAsState()
@@ -568,6 +570,10 @@ fun main(args: Array<String>) = if (installPendingUpdate()) Unit else applicatio
                             onSaveQueueToPlaylist = { appModel.openAddToPlaylist(queue) },
                             onDislike = { currentSong?.let { appModel.dislikeSong(it) } },
                             canvasFile = canvasFile,
+                            videoMode = videoMode,
+                            videoState = videoState,
+                            playbackRate = prefs.playbackSpeed,
+                            onToggleVideo = { appModel.toggleVideoMode() },
                             comments = comments,
                             onLoadComments = { appModel.loadComments() },
                             onLoadMoreComments = { appModel.loadMoreComments() },

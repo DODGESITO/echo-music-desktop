@@ -74,6 +74,7 @@ repositorio privado la app no encuentra las versiones.
 - Botones ⏮ ⏯ ⏭ en la vista previa de la barra de tareas
 - Pausa al desconectar audífonos (Bluetooth o con cable) y sigue al reconectarlos
 - Music Flow (descubrir deslizando) y playlists con IA: crear, "De tus gustos" y modificar (con tu clave de OpenRouter o Mistral)
+- Modo video: el videoclip oficial en el reproductor, sincronizado (360p, lo que YouTube permite sin tokens especiales)
 - La cookie de YouTube y las claves se guardan cifradas con Windows (DPAPI)
 
 Los datos del usuario se guardan en `%USERPROFILE%\.echomusic`.
@@ -103,7 +104,7 @@ El script copia los módulos y archivos que usa la PC y vuelve a aplicar los arr
 
 ## Pendiente
 
-- Del celular: modo video, Jellyfin/Navidrome, biblioteca y Canvas de Spotify, tipografías
+- Del celular: Jellyfin/Navidrome, biblioteca y Canvas de Spotify, tipografías
 
 ## Licencia
 

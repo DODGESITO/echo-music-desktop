@@ -78,6 +78,10 @@ fun ExpandedPlayerModal(
     onAddToPlaylist: () -> Unit = {},
     onDislike: () -> Unit = {},
     canvasFile: java.io.File? = null,
+    videoMode: Boolean = false,
+    videoState: echo.music.desktop.state.VideoState = echo.music.desktop.state.VideoState(),
+    playbackRate: Float = 1f,
+    onToggleVideo: () -> Unit = {},
     comments: echo.music.desktop.state.CommentsState = echo.music.desktop.state.CommentsState(),
     onLoadComments: () -> Unit = {},
     onLoadMoreComments: () -> Unit = {},
@@ -177,6 +181,30 @@ fun ExpandedPlayerModal(
                         Box(
                             contentAlignment = Alignment.Center
                         ) {
+                            val videoFile = videoState.file?.takeIf { videoMode && videoState.songId == currentSong.id }
+                            if (videoFile != null) {
+                                // Video mode: the music video instead of the cover, kept on the audio's time.
+                                Box(
+                                    modifier = Modifier
+                                        .width(600.dp)
+                                        .aspectRatio(16f / 9f)
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .background(androidx.compose.ui.graphics.Color.Black),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    androidx.compose.runtime.key(videoFile) {
+                                        echo.music.desktop.video.MusicVideoView(
+                                            file = videoFile,
+                                            clock = echo.music.desktop.video.VideoClock(
+                                                positionMs = playbackState.currentPositionMs,
+                                                isPlaying = playbackState.isPlaying,
+                                                rate = playbackRate.toDouble()
+                                            ),
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                    }
+                                }
+                            } else {
                             AmbientGlow(
                                 enabled = isAmbientGlowEnabled,
                                 size = 340.dp
@@ -202,7 +230,28 @@ fun ExpandedPlayerModal(
                                         echo.music.desktop.canvas.CanvasVideoView(canvasFile, Modifier.fillMaxSize())
                                     }
                                 }
+                                if (videoMode && videoState.loading && videoState.songId == currentSong.id) {
+                                    Box(
+                                        Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.55f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            CircularProgressIndicator(color = NothingColors.AccentRed, strokeWidth = 3.dp, modifier = Modifier.size(34.dp))
+                                            Spacer(Modifier.height(10.dp))
+                                            Text(
+                                                "Cargando video" + (videoState.progress?.let { " ${(it * 100).toInt()}%" } ?: "…"),
+                                                color = androidx.compose.ui.graphics.Color.White,
+                                                style = MaterialTheme.typography.bodySmall
+                                            )
+                                        }
+                                    }
+                                }
                             }
+                            }
+                        }
+                        if (videoMode && videoState.message != null && videoState.songId == currentSong.id) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(videoState.message, color = NothingColors.TextMuted, style = MaterialTheme.typography.bodySmall)
                         }
 
                         Spacer(modifier = Modifier.height(28.dp))
@@ -238,6 +287,14 @@ fun ExpandedPlayerModal(
                                 )
                             }
 
+                            IconButton(onClick = onToggleVideo) {
+                                Icon(
+                                    Icons.Default.OndemandVideo,
+                                    contentDescription = if (videoMode) "Ver portada" else "Ver video",
+                                    tint = if (videoMode) NothingColors.AccentRed else NothingColors.TextMuted,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
                             IconButton(onClick = onToggleFavorite) {
                                 Icon(
                                     if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
